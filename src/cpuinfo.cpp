@@ -131,7 +131,7 @@ init_cpu_info() noexcept
                 }
                 else if (newCacheLineSize != pSlpi[i].Cache.LineSize)
                 {
-                    throw std::runtime_error("GetLogicalProcessorInformation() reports different L1 cache line sizes for different cores"); // ...and we cannot handle that
+                    throw std::runtime_error("GetLogicalProcessorInformation() reports different L1 cache line sizes for different cores");  // ...and we cannot handle that
                 }
             }
         }

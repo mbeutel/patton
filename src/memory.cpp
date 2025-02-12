@@ -21,9 +21,7 @@
 #include <patton/detail/errors.hpp>
 
 
-namespace patton {
-
-namespace detail {
+namespace patton::detail {
 
 
 constexpr std::size_t maxTrapCount = 4;
@@ -199,6 +197,4 @@ alignment_in_bytes(std::size_t a) noexcept
 }
 
 
-} // namespace detail
-
-} // namespace patton
+} // namespace patton::detail

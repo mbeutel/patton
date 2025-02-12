@@ -473,28 +473,6 @@ public:
 # error Unsupported operating system.
 #endif
     }
-//    static void
-//    join(std::span<os_thread* const> threads)
-//    {
-//#if defined(_WIN32)
-//        for (auto* thread : threads)
-//        {
-//            gsl_Expects(thread->is_running());
-//            DWORD result = ::WaitForSingleObject(thread->handle_.get(), INFINITE);
-//            detail::win32_assert(result != WAIT_FAILED);
-//            thread->handle_.reset();
-//        }
-//#elif defined(USE_PTHREAD)
-//        for (auto* thread : threads)
-//        {
-//            gsl_Expects(thread->is_running());
-//            detail::posix_check(::pthread_join(thread->handle_.get(), NULL));
-//            thread->handle_.release();
-//        }
-//#else
-//# error Unsupported operating system.
-//#endif
-//    }
 };
 
 
