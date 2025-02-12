@@ -1,0 +1,106 @@
+
+trigger:
+- master
+- mr/*
+
+pr:
+- master
+
+resources:
+  repositories:
+    - repository: CImakeshift
+      type: github
+      name: mbeutel/CImakeshift
+      endpoint: mbeutel
+
+jobs:
+- template: azure-pipelines/cmake.yml@CImakeshift
+  parameters:
+    vcpkgRef: 74ec888e385d189b42d6b398d0bbaa6f1b1d3b0e
+      
+    cmakeConfigArgs: '-DPATTON_BUILD_TESTING=ON -DPATTON_BUILD_BENCHMARKS=ON'
+
+    cmakeBuildConfigurations: [Debug]
+
+    targets:
+
+    - os: Windows
+      cxxCompiler: MSVC
+      cxxCompilerVersions: [VS2022]
+      platforms: [x86, x64]
+      tag: 'optimized'
+      cmakeBuildConfigurations: [Release]
+
+    - os: Linux
+      cxxCompiler: GCC
+      cxxCompilerVersions: [13]
+      platforms: [x64]
+      tag: 'optimized'
+      cmakeBuildConfigurations: [Release]
+
+    - os: MacOS
+      cxxCompiler: AppleClang
+      cxxCompilerVersions: [15_2]
+      platforms: [x64]
+      tag: 'optimized'
+      cmakeBuildConfigurations: [Release]
+
+    - os: Windows
+      cxxCompiler: MSVC
+      cxxCompilerVersions: [VS2019, VS2022]
+      platforms: [x86, x64]
+
+    - os: Windows
+      cxxCompiler: Clang
+      cxxCompilerVersions: [VS2019, VS2022]
+      platforms: [x86, x64]
+
+    - os: Linux
+      cxxCompiler: GCC
+      cxxCompilerVersions: [10]
+      platforms: [x64]
+
+    - os: Linux
+      cxxCompiler: GCC
+      cxxCompilerVersions: [13]
+      platforms: [x64]
+      cxxStandardLibraryDebugMode: true
+      cxxSanitizers: [AddressSanitizer, UndefinedBehaviorSanitizer]
+      tag: 'sanitize'
+
+    - os: Linux
+      cxxCompiler: Clang
+      cxxCompilerVersions: [12]
+      platforms: [x64]
+
+    - os: Linux
+      cxxCompiler: Clang
+      cxxCompilerVersions: [17]
+      platforms: [x64]
+      cxxStandardLibraryDebugMode: true
+      cxxSanitizers: [AddressSanitizer, UndefinedBehaviorSanitizer, ImplicitIntegerArithmeticValueChange]
+      tag: 'sanitize'
+
+    - os: Linux
+      cxxCompiler: Clang
+      cxxCompilerVersions: [17]
+      platforms: [x64]
+      tag: 'optimized'
+      cmakeBuildConfigurations: [Release]
+
+    - os: MacOS
+      cxxCompiler: GCC
+      cxxCompilerVersions: [10, 13]
+      platforms: [x64]
+
+    - os: MacOS
+      cxxCompiler: GCC
+      cxxCompilerVersions: [13]
+      platforms: [x64]
+      tag: 'optimized'
+      cmakeBuildConfigurations: [Release]
+
+    - os: MacOS
+      cxxCompiler: AppleClang
+      cxxCompilerVersions: [14, 15_2]
+      platforms: [x64]

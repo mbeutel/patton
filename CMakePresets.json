@@ -1,0 +1,94 @@
+﻿{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows",
+      "displayName": "Windows x64",
+      "description": "Target Windows with the Visual Studio development environment.",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "environment": {
+        // Avoid rebuilding all dependencies when upgrading VS
+        "VCPKG_FEATURE_FLAGS": "-compilertracking"
+      },
+      "cacheVariables": {
+        // Vcpkg settings
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+
+        // General settings
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+        "CMAKESHIFT_WARNING_LEVEL": "high",
+        "CMAKE_EXPORT_PACKAGE_REGISTRY": "ON",
+
+        // Project-specific settings
+        "PATTON_BUILD_TESTING": "ON"
+      },
+      "vendor": { "microsoft.com/VisualStudioSettings/CMake/1.0": { "hostOS": [ "Windows" ] } }
+    },
+    {
+      "name": "windows-clang",
+      "displayName": "Windows x64 Clang",
+      "description": "Target Windows with the Visual Studio development environment.",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "environment": {
+        // Avoid rebuilding all dependencies when upgrading VS
+        "VCPKG_FEATURE_FLAGS": "-compilertracking",
+        "CC": "clang-cl",
+        "CXX": "clang-cl"
+      },
+      "cacheVariables": {
+        // Vcpkg settings
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+
+        // General settings
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+        "CMAKESHIFT_WARNING_LEVEL": "high",
+
+        // Project-specific settings
+        "PATTON_BUILD_TESTING": "ON"
+      },
+      "vendor": { "microsoft.com/VisualStudioSettings/CMake/1.0": { "hostOS": [ "Windows" ] } }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "displayName": "Debug",
+      "configurePreset": "windows",
+      "configuration": "Debug",
+      "nativeToolOptions": [ "-j 2" ]
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Release",
+      "configurePreset": "windows",
+      "configuration": "RelWithDebInfo",
+      "nativeToolOptions": [ "-j 2" ]
+    },
+    {
+      "name": "windows-clang-debug",
+      "displayName": "Debug-Clang",
+      "configurePreset": "windows-clang",
+      "configuration": "Debug",
+      "nativeToolOptions": [ "-j 2" ]
+    },
+    {
+      "name": "windows-clang-release",
+      "displayName": "Release-Clang",
+      "configurePreset": "windows-clang",
+      "configuration": "RelWithDebInfo",
+      "nativeToolOptions": [ "-j 2" ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+    "name": "patton",
+    "version-string": "1.0",
+    "description": "simple concurrency in C++",
+    "homepage": "https://github.com/mbeutel/patton",
+    "license": " BSL-1.0",
+    "dependencies": [
+        "gsl-lite"
+    ]
+}
