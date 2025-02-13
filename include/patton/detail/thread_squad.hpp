@@ -75,7 +75,8 @@ public:
     void
     execute(thread_squad_impl_base& impl, int i, int numRunningThreads) override
     {
-        action_(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
+        auto laction = action_;
+        laction(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
     }
 };
 
@@ -104,7 +105,8 @@ public:
     void
     execute(thread_squad_impl_base& impl, int i, int numRunningThreads) override
     {
-        subthreadData_[i].value = transform_(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
+        auto ltransform = transform_;
+        subthreadData_[i].value = ltransform(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
     }
     void
     merge(int iDst, int iSrc) override
