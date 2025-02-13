@@ -20,8 +20,6 @@
 #include <system_error>
 #include <thread>
 #include <atomic>
-#include <mutex>
-#include <condition_variable>
 
 #if defined(_WIN32)
 # ifndef NOMINMAX
@@ -314,9 +312,9 @@ constexpr int yieldCountExp = 0;  // 6
 
 template <typename T>
 bool
-wait_equal_exponential_backoff(std::atomic<T> const& a, T oldValue, bool spinWait = true)
+wait_equal_exponential_backoff(std::atomic<T> const& a, T oldValue)
 {
-    int lspinCount = spinWait ? spinCount : 0;
+    int lspinCount = spinCount;
     if (a.load(std::memory_order_relaxed) != oldValue) return true;
     for (int i = 0; i < (1 << pauseCountExp); ++i)
     {
@@ -336,7 +334,7 @@ wait_equal_exponential_backoff(std::atomic<T> const& a, T oldValue, bool spinWai
         if (a.load(std::memory_order_relaxed) != oldValue) return true;
         detail::pause();
     }
-    int lyieldCount = spinWait ? (1 << yieldCountExp) : 0;
+    int lyieldCount = 1 << yieldCountExp;
     for (int i = 0; i < lyieldCount; ++i)
     {
         if (a.load(std::memory_order_relaxed) != oldValue) return true;
@@ -345,42 +343,36 @@ wait_equal_exponential_backoff(std::atomic<T> const& a, T oldValue, bool spinWai
     return false;
 }
 
+enum class wait_mode
+{
+    wait,
+    spin_wait
+};
+
 template <typename T>
 T
 wait_and_load(
-    std::mutex& mutex, std::condition_variable& cv,
     std::atomic<T>& a, T oldValue,
-    bool spinWait = true)
+    wait_mode waitMode = wait_mode::spin_wait)
 {
-    if (!detail::wait_equal_exponential_backoff(a, oldValue, spinWait))
+    if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
     {
-        auto lock = std::unique_lock(mutex);  // implicit acquire
-        while (a.load(std::memory_order_relaxed) == oldValue)
-        {
-            cv.wait(lock);  // implicit release/acquire
-        }
-        // implicit release in destructor of `lock`
+        a.wait(oldValue, std::memory_order_relaxed);
     }
-
     return a.load(std::memory_order_acquire);
 }
 
 template <typename T>
 T
 toggle_and_notify(
-    std::mutex& mutex, std::condition_variable& cv,
     std::atomic<T>& a)
 {
     std::atomic_thread_fence(std::memory_order_release);
 
     T oldValue = a.load(std::memory_order_relaxed);
     T newValue = 1 ^ oldValue;
-    {
-        auto lock = std::lock_guard(mutex);  // implicit acquire
-        a.store(newValue, std::memory_order_release);
-        // implicit release in destructor of `lock`
-    }
-    cv.notify_one();
+    a.store(newValue, std::memory_order_release);
+    a.notify_one();
     return oldValue;
 }
 
@@ -554,10 +546,9 @@ public:
         thread_squad_task&
         task_wait() noexcept
         {
-            auto& notifyData = threadSquad_.threadNotifyData_[threadIdx_];
             auto currentSense = outgoing_.load(std::memory_order_relaxed);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
-            detail::wait_and_load(notifyData.mutex, notifyData.cv, incoming_, currentSense, threadSquad_.useSpinWait_);
+            detail::wait_and_load(incoming_, currentSense, threadSquad_.waitMode_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -578,8 +569,7 @@ public:
         task_signal_completion() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling outgoing sense %d\n", threadIdx_, (1 ^ outgoing_.load(std::memory_order_relaxed)));
-            auto& notifyData = threadSquad_.threadNotifyData_[threadIdx_];
-            detail::toggle_and_notify(notifyData.mutex, notifyData.cv, outgoing_);
+            detail::toggle_and_notify(outgoing_);
         }
 
         int
@@ -599,18 +589,11 @@ public:
 
 
 private:
-    struct thread_notify_data
-    {
-        std::mutex mutex;
-        std::condition_variable cv;
-    };
-
     static constexpr int treeBreadth = 8;
 
         // synchronization data
-    aligned_buffer<thread_notify_data, cache_line_alignment> threadNotifyData_;
     aligned_buffer<thread_data, cache_line_alignment> threadData_;
-    bool useSpinWait_;
+    wait_mode waitMode_;
 
         // task-specific data
     detail::thread_squad_task* task_;
@@ -669,7 +652,7 @@ private:
         }
         for (int i = first + substride; i < last; i += substride)
         {
-            wait_for_thread(first, i, useSpinWait_);
+            wait_for_thread(first, i, waitMode_);
         }
     }
 
@@ -677,9 +660,8 @@ private:
 public:
     thread_squad_impl(thread_squad::params const& params)
         : thread_squad_impl_base{ params.num_threads },
-          threadNotifyData_(gsl::narrow_failfast<std::size_t>(params.num_threads)),
           threadData_(gsl::narrow_failfast<std::size_t>(params.num_threads), std::in_place, *this),
-          useSpinWait_(params.spin_wait)
+          waitMode_(params.spin_wait ? wait_mode::spin_wait : wait_mode::wait)
     {
         for (int i = 0; i < numThreads; ++i)
         {
@@ -714,7 +696,7 @@ public:
         for (int i = 0; i < numThreadsToWake; ++i)
         {
             THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
-            detail::toggle_and_notify(threadNotifyData_[i].mutex, threadNotifyData_[i].cv, threadData_[i].incoming_);
+            detail::toggle_and_notify(threadData_[i].incoming_);
         }
         for (int i = 0; i < numThreads; ++i)
         {
@@ -737,16 +719,16 @@ public:
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx)
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: notifying %d with incoming sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed)));
-        detail::toggle_and_notify(threadNotifyData_[targetThreadIdx].mutex, threadNotifyData_[targetThreadIdx].cv, threadData_[targetThreadIdx].incoming_);
+        detail::toggle_and_notify(threadData_[targetThreadIdx].incoming_);
     }
 
     void
-    wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, bool spinWait = true)
+    wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait)
     {
         int currentSense = threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed);
         int prevSense = 1 ^ currentSense;
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaiting %d for outgoing sense %d\n", callingThreadIdx, targetThreadIdx, currentSense);
-        detail::wait_and_load(threadNotifyData_[targetThreadIdx].mutex, threadNotifyData_[targetThreadIdx].cv, threadData_[targetThreadIdx].outgoing_, prevSense, spinWait);
+        detail::wait_and_load(threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited %d\n", callingThreadIdx, targetThreadIdx);
     }
 
@@ -857,7 +839,7 @@ noexcept  // We cannot really handle exceptions here.
         }
         if (!op.params.join_requested)
         {
-            self.wait_for_thread(-1, 0, false); // no spin wait in main thread
+            self.wait_for_thread(-1, 0, wait_mode::wait); // no spin wait in main thread
         }
         else
         {
