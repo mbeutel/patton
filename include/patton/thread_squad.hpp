@@ -5,6 +5,7 @@
 
 #include <span>
 #include <utility>     // for move()
+#include <concepts>
 #include <functional>  // for function<>
 
 #include <gsl-lite/gsl-lite.hpp>  // for not_null<>
@@ -66,7 +67,7 @@ public:
         //
     class task_context
     {
-        friend detail::thread_squad_impl;
+        friend detail::task_context_factory;
 
     private:
         detail::thread_squad_impl_base& impl_;
@@ -115,7 +116,7 @@ private:
     create(thread_squad::params p);
 
     void
-    do_run(std::function<void(task_context)> task, int concurrency, bool join);
+    do_run(detail::thread_squad_task& op);
 
 public:
     explicit thread_squad(params const& p)
@@ -141,63 +142,50 @@ public:
     }
 
         //
-        // Runs the given action on all threads and waits until all tasks have run to completion.
+        // Runs the given action on `concurrency` threads and waits until all tasks have run to completion.
         //ᅟ
+        // `concurrency` must not exceed the number of threads in the thread squad. A value of -1 indicates that all available
+        // threads shall be used.
         // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
         // task context. If `action()` throws an exception, `std::terminate()` is called.
         //
+    template <std::invocable<task_context> ActionT>
     void
-    run(std::function<void(task_context)> action) &
+    run(ActionT action, int concurrency = -1) &
     {
-        gsl_Expects(action);
+        gsl_Expects(concurrency >= -1 && concurrency <= handle_->numThreads);
 
-        do_run(std::move(action), handle_->numThreads, false);
+        if (concurrency == -1)
+        {
+            concurrency = handle_->numThreads;
+    }
+        auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
+        op.concurrency = concurrency;
+        do_run(op);
     }
 
         //
         // Runs the given action on `concurrency` threads and waits until all tasks have run to completion.
         //ᅟ
-        // `concurrency` must not exceed the number of threads in the thread squad.
+        // `concurrency` must not exceed the number of threads in the thread squad. A value of -1 indicates that all available
+        // threads shall be used.
         // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
         // task context. If `action()` throws an exception, `std::terminate()` is called.
         //
+    template <std::invocable<task_context> ActionT>
     void
-    run(std::function<void(task_context)> action, int concurrency) &
+    run(ActionT action, int concurrency = -1) &&
     {
-        gsl_Expects(action);
-        gsl_Expects(concurrency >= 0 && concurrency <= handle_->numThreads);
+        gsl_Expects(concurrency >= -1 && concurrency <= handle_->numThreads);
 
-        do_run(std::move(action), concurrency, false);
+        if (concurrency == -1)
+    {
+            concurrency = handle_->numThreads;
     }
-
-        //
-        // Runs the given action on all threads and waits until all tasks have run to completion.
-        //ᅟ
-        // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
-        // task context. If `action()` throws an exception, `std::terminate()` is called.
-        //
-    void
-    run(std::function<void(task_context)> action) &&
-    {
-        gsl_Expects(action);
-
-        do_run(std::move(action), handle_->numThreads, true);
-    }
-
-        //
-        // Runs the given action on `concurrency` threads and waits until all tasks have run to completion.
-        //ᅟ
-        // `concurrency` must not exceed the number of threads in the thread squad.
-        // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
-        // task context. If `action()` throws an exception, `std::terminate()` is called.
-        //
-    void
-    run(std::function<void(task_context)> action, int concurrency) &&
-    {
-        gsl_Expects(action);
-        gsl_Expects(concurrency >= 0 && concurrency <= handle_->numThreads);
-
-        do_run(std::move(action), concurrency, true);
+        auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
+        op.concurrency = concurrency;
+        op.join_requested = true;
+        do_run(op);
     }
 };
 
