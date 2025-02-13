@@ -6,7 +6,7 @@
 #include <span>
 #include <utility>     // for move()
 #include <concepts>
-#include <functional>  // for function<>
+#include <functional>  // for function<>, identity
 
 #include <gsl-lite/gsl-lite.hpp>  // for not_null<>
 
@@ -84,6 +84,11 @@ public:
         {
         }
 
+        void
+        collect(detail::task_context_synchronizer& synchronizer);
+        void
+        broadcast(detail::task_context_synchronizer& synchronizer);
+
     public:
             //
             // The current thread index.
@@ -101,6 +106,38 @@ public:
         num_threads() const noexcept
         {
             return numRunningThreads_;
+        }
+
+        void
+        sync()
+        {
+            auto synchronizer = detail::task_context_synchronizer{ };
+            collect(synchronizer);
+            broadcast(synchronizer);
+        }
+
+        template <typename T, typename ReduceOpT, typename TransformFuncT>
+        auto
+        reduce_transform(T value, ReduceOpT reduce, TransformFuncT transform)
+            -> std::decay_t<decltype(transform(value))>
+        {
+            using R = std::decay_t<decltype(transform(value))>;
+
+            auto synchronizer = detail::task_context_reduce_transform_synchronizer<T, ReduceOpT, R>(std::move(value), std::move(reduce));
+            collect(synchronizer);
+            if (threadIdx_ == 0)
+            {
+                synchronizer.data.result = transform(std::move(synchronizer.data.value));
+            }
+            broadcast(synchronizer);
+            return std::move(synchronizer.data).result;
+        }
+
+        template <typename T, typename ReduceOpT>
+        T
+        reduce(T value, ReduceOpT reduce)
+        {
+            return reduce_transform(std::move(value), std::move(reduce), std::identity{ });
         }
     };
 
@@ -155,7 +192,7 @@ public:
         // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
         // task context. If `action()` throws an exception, `std::terminate()` is called.
         //
-    template <std::invocable<task_context> ActionT>
+    template <std::invocable<task_context&> ActionT>
     void
     run(ActionT action, int concurrency = -1) &
     {
@@ -178,7 +215,7 @@ public:
         // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
         // task context. If `action()` throws an exception, `std::terminate()` is called.
         //
-    template <std::invocable<task_context> ActionT>
+    template <std::invocable<task_context&> ActionT>
     void
     run(ActionT action, int concurrency = -1) &&
     {
@@ -203,7 +240,7 @@ public:
         // The thread squad makes a dedicated copy of `transform` for every participating thread and invokes it with an appropriate
         // task context. If `transform()` or `reduce()` throws an exception, `std::terminate()` is called.
         //
-    template <std::invocable<task_context> TransformFuncT, typename T, typename ReduceOpT>
+    template <std::invocable<task_context&> TransformFuncT, typename T, typename ReduceOpT>
     T
     transform_reduce(TransformFuncT transform, T init, ReduceOpT reduce, int concurrency = -1) &
     {
@@ -232,7 +269,7 @@ public:
         // The thread squad makes a dedicated copy of `transform` for every participating thread and invokes it with an appropriate
         // task context. If `transform()` or `reduce()` throws an exception, `std::terminate()` is called.
         //
-    template <std::invocable<task_context> TransformFuncT, typename T, typename ReduceOpT>
+    template <std::invocable<task_context&> TransformFuncT, typename T, typename ReduceOpT>
     T
     transform_reduce(TransformFuncT transform, T init, ReduceOpT reduce, int concurrency = -1) &&
     {

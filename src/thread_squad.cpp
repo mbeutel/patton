@@ -516,14 +516,20 @@ public:
         os_thread osThread_;
 
             // synchronization data
-        std::atomic<int> incoming_;
-        std::atomic<int> outgoing_;
+        std::atomic<int> incoming_;  // new task notification
+        std::atomic<int> outgoing_;  // task completion notification
+        std::atomic<int> upward_;    // synchronization point collection
+        std::atomic<int> downward_;  // synchronization point distribution
+        void* syncData_;             // synchronization data made accessible to the superordinate thread between collection and distribution
 
     public:
         thread_data(thread_squad_impl& _impl) noexcept
             : threadSquad_(_impl),
               incoming_(0),
-              outgoing_(0)
+              outgoing_(0),
+              upward_(0),
+              downward_(0),
+              syncData_(nullptr)
         {
         }
 
@@ -654,6 +660,52 @@ private:
         }
     }
 
+    void
+    broadcast_to_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx)
+    {
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: notifying %d with downward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed)));
+        synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
+        detail::toggle_and_notify(threadData_[targetThreadIdx].downward_);
+    }
+
+    void
+    collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx)
+    {
+        int prevSense = threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaiting %d for upward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ prevSense));
+        detail::wait_and_load(threadData_[targetThreadIdx].upward_, prevSense, waitMode_);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaited %d\n", callingThreadIdx, targetThreadIdx);
+        synchronizer.collect(threadData_[targetThreadIdx].syncData_);
+    }
+
+    void
+    broadcast_to_subthreads_impl(task_context_synchronizer& synchronizer, int first, int last, int stride)
+    {
+        while (stride != 1)
+        {
+            int substride = next_substride(stride);
+            for (int i = first + substride; i < last; i += substride)
+            {
+                broadcast_to_thread(synchronizer, first, i);
+            }
+            last = std::min(first + substride, last);
+            stride = substride;
+        }
+    }
+
+    void
+    collect_from_subthreads_impl(task_context_synchronizer& synchronizer, int first, int last, int stride)
+    {
+        int substride = next_substride(stride);
+        if (stride != 1)
+        {
+            collect_from_subthreads_impl(synchronizer, first, std::min(first + substride, last), substride);
+        }
+        for (int i = first + substride; i < last; i += substride)
+        {
+            collect_from_thread(synchronizer, first, i);
+        }
+    }
 
 public:
     thread_squad_impl(thread_squad::params const& params)
@@ -743,6 +795,31 @@ public:
     {
         int stride = threadData_[callingThreadIdx].numSubthreads_;
         wait_for_subthreads_impl(callingThreadIdx, std::min(callingThreadIdx + stride, _concurrency), stride);
+    }
+
+    void
+    synchronize_collect(task_context_synchronizer& synchronizer, int callingThreadIdx)
+    {
+            // First synchronize with subordinate threads.
+        int stride = threadData_[callingThreadIdx].numSubthreads_;
+        collect_from_subthreads_impl(synchronizer, callingThreadIdx, std::min(callingThreadIdx + stride, task_->params.concurrency), stride);
+
+            // If there is a superordinate thread, signal availability and wait.
+            // Make the synchronizer data available for the duration of the synchronization.
+        if (callingThreadIdx > 0)
+        {
+            threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
+            int oldValue = detail::toggle_and_notify(threadData_[callingThreadIdx].upward_);
+            detail::wait_and_load(threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
+            threadData_[callingThreadIdx].syncData_ = nullptr;
+        }
+    }
+    void
+    synchronize_broadcast(task_context_synchronizer& synchronizer, int callingThreadIdx)
+    {
+            // Broadcast the result to subordinate threads.
+        int stride = threadData_[callingThreadIdx].numSubthreads_;
+        broadcast_to_subthreads_impl(synchronizer, callingThreadIdx, std::min(callingThreadIdx + stride, task_->params.concurrency), stride);
     }
 
     void
@@ -903,6 +980,20 @@ thread_squad_task::merge([[maybe_unused]] int iDst, [[maybe_unused]] int iSrc)
 {
 }
 
+void*
+task_context_synchronizer::sync_data()
+{
+    return nullptr;
+}
+void
+task_context_synchronizer::collect([[maybe_unused]] void const* src)
+{
+}
+void
+task_context_synchronizer::broadcast([[maybe_unused]] void* dst)
+{
+}
+
 
 struct alignas(std::hardware_destructive_interference_size) thread_squad_nop : thread_squad_task
 {
@@ -931,6 +1022,20 @@ thread_squad_impl_deleter::operator ()(thread_squad_impl_base* base)
 } // namespace patton::detail
 
 namespace patton {
+
+
+void
+thread_squad::task_context::collect(detail::task_context_synchronizer& synchronizer)
+{
+    auto& impl = static_cast<detail::thread_squad_impl&>(impl_);
+    impl.synchronize_collect(synchronizer, threadIdx_);
+}
+void
+thread_squad::task_context::broadcast(detail::task_context_synchronizer& synchronizer)
+{
+    auto& impl = static_cast<detail::thread_squad_impl&>(impl_);
+    impl.synchronize_broadcast(synchronizer, threadIdx_);
+}
 
 
 detail::thread_squad_handle

@@ -49,10 +49,8 @@ protected:
 public:
     thread_squad_task_params params;
 
-    virtual void
-    execute(thread_squad_impl_base& impl, int i, int numRunningThreads) = 0;
-    virtual void
-    merge(int iDst, int iSrc);
+    virtual void execute(thread_squad_impl_base& impl, int i, int numRunningThreads) = 0;
+    virtual void merge(int iDst, int iSrc);
 };
 
 #ifdef _MSC_VER
@@ -76,10 +74,10 @@ public:
     execute(thread_squad_impl_base& impl, int i, int numRunningThreads) override
     {
         auto laction = action_;
-        laction(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
+        auto ctx = task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads);
+        laction(ctx);
     }
 };
-
 
 template <typename T>
 struct alignas(std::hardware_destructive_interference_size) thread_reduce_data
@@ -106,12 +104,62 @@ public:
     execute(thread_squad_impl_base& impl, int i, int numRunningThreads) override
     {
         auto ltransform = transform_;
-        subthreadData_[i].value = ltransform(task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads));
+        auto ctx = task_context_factory::template make_task_context<TaskContextT>(impl, i, numRunningThreads);
+        subthreadData_[i].value = ltransform(ctx);
     }
     void
     merge(int iDst, int iSrc) override
     {
         subthreadData_[iDst].value = reduce_(std::move(subthreadData_[iDst].value), std::move(subthreadData_[iSrc].value));
+    }
+};
+
+
+struct task_context_synchronizer
+{
+public:
+    ~task_context_synchronizer() = default;  // intentionally non-virtual – the lifetime of the object is not managed through a base class pointer
+
+    virtual void* sync_data();
+    virtual void collect(void const* src);
+    virtual void broadcast(void* dst);
+};
+
+template <typename T, typename R>
+struct alignas(std::hardware_destructive_interference_size) thread_reduce_transform_data
+{
+    T value;
+    R result;
+};
+
+template <typename T, typename ReduceOpT, typename R>
+struct alignas(std::hardware_destructive_interference_size) task_context_reduce_transform_synchronizer : task_context_synchronizer
+{
+    thread_reduce_transform_data<T, R> data;
+    ReduceOpT reduce;
+
+    task_context_reduce_transform_synchronizer(T&& _value, ReduceOpT&& _reduce)
+        : data{
+              .value = std::move(_value)
+          },
+          reduce(std::move(_reduce))
+    {
+    }
+
+    void*
+    sync_data() override
+    {
+        return &data;
+    }
+    void
+    collect(void const* src) override
+    {
+        data.value = reduce(std::move(data.value), std::move(static_cast<thread_reduce_transform_data<T, R> const*>(src)->value));
+    }
+    void
+    broadcast(void* dst) override
+    {
+        static_cast<thread_reduce_transform_data<T, R>*>(dst)->result = data.result;
     }
 };
 #ifdef _MSC_VER

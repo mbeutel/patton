@@ -135,18 +135,52 @@ TEST_CASE("thread_squad")
                     int partition = ((numToSum+1) + ctx.num_threads() - 1)/ctx.num_threads();
                     int first = ctx.thread_index()*partition;
                     int last = std::min<int>(first + partition, numToSum+1);
-                    int sum = 0;
+                    int partialSum = 0;
                     for (int i = first; i != last; ++i)
                     {
                         volatile int local = i;  // prevent the compiler (Clang, in particular) from optimizing this further
-                        sum += local;
+                        partialSum += local;
                     }
-                    return sum;
+                    return partialSum;
                 },
                 0,
                 std::plus<>{ },
                 i);
             CHECK(sum == sumOfNum);
+        }
+    }
+
+    SECTION("synchronization")
+    {
+        int numToSum = GENERATE(10'000);
+        int sumOfNum = numToSum*(numToSum + 1)/2;
+    
+        auto threadSquad = patton::thread_squad(params);
+        for (int i = 1; i <= int(numActualThreads); ++i)
+        {
+            CAPTURE(i);
+            bool reducedSumIsCorrectForEveryThread = threadSquad.transform_reduce(
+                [numToSum, sumOfNum]
+                (patton::thread_squad::task_context& ctx)
+                {
+                    int partition = ((numToSum+1) + ctx.num_threads() - 1)/ctx.num_threads();
+                    int first = ctx.thread_index()*partition;
+                    int last = std::min<int>(first + partition, numToSum+1);
+                    int partialSum = 0;
+                    for (int i = first; i != last; ++i)
+                    {
+                        volatile int local = i;  // prevent the compiler (Clang, in particular) from optimizing this further
+                        partialSum += local;
+                    }
+
+                    int sum = ctx.reduce(partialSum, std::plus<>{ });
+
+                    return sum == sumOfNum;
+                },
+                true,
+                std::logical_and<>{ },
+                i);
+            CHECK(reducedSumIsCorrectForEveryThread);
         }
     }
 }
