@@ -42,6 +42,11 @@ public:
         bool pin_to_hardware_threads = false;
 
             //
+            // Controls whether thread synchronization uses spin waiting with exponential backoff.
+            //
+        bool spin_wait = false;
+
+            //
             // Maximal number of hardware threads to pin threads to. A value of 0 indicates "as many as possible".
             //ᅟ
             // If `max_num_hardware_threads` is 0 and `hardware_thread_mappings` is non-empty, `hardware_thread_mappings.size()`
@@ -158,7 +163,7 @@ public:
         if (concurrency == -1)
         {
             concurrency = handle_->numThreads;
-    }
+        }
         auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
         op.params.concurrency = concurrency;
         do_run(op);
@@ -179,9 +184,9 @@ public:
         gsl_Expects(concurrency >= -1 && concurrency <= handle_->numThreads);
 
         if (concurrency == -1)
-    {
+        {
             concurrency = handle_->numThreads;
-    }
+        }
         auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
         op.params.concurrency = concurrency;
         op.params.join_requested = true;

@@ -557,7 +557,7 @@ public:
             auto& notifyData = threadSquad_.threadNotifyData_[threadIdx_];
             auto currentSense = outgoing_.load(std::memory_order_relaxed);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
-            detail::wait_and_load(notifyData.mutex, notifyData.cv, incoming_, currentSense);
+            detail::wait_and_load(notifyData.mutex, notifyData.cv, incoming_, currentSense, threadSquad_.useSpinWait_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -610,6 +610,7 @@ private:
         // synchronization data
     aligned_buffer<thread_notify_data, cache_line_alignment> threadNotifyData_;
     aligned_buffer<thread_data, cache_line_alignment> threadData_;
+    bool useSpinWait_;
 
         // task-specific data
     detail::thread_squad_task* task_;
@@ -668,7 +669,7 @@ private:
         }
         for (int i = first + substride; i < last; i += substride)
         {
-            wait_for_thread(first, i);
+            wait_for_thread(first, i, useSpinWait_);
         }
     }
 
@@ -677,7 +678,8 @@ public:
     thread_squad_impl(thread_squad::params const& params)
         : thread_squad_impl_base{ params.num_threads },
           threadNotifyData_(gsl::narrow_failfast<std::size_t>(params.num_threads)),
-          threadData_(gsl::narrow_failfast<std::size_t>(params.num_threads), std::in_place, *this)
+          threadData_(gsl::narrow_failfast<std::size_t>(params.num_threads), std::in_place, *this),
+          useSpinWait_(params.spin_wait)
     {
         for (int i = 0; i < numThreads; ++i)
         {
