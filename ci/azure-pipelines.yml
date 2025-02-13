@@ -33,14 +33,14 @@ jobs:
 
     - os: Linux
       cxxCompiler: GCC
-      cxxCompilerVersions: [13]
+      cxxCompilerVersions: [14]
       platforms: [x64]
       tag: 'optimized'
       cmakeBuildConfigurations: [Release]
 
     - os: MacOS
       cxxCompiler: AppleClang
-      cxxCompilerVersions: [15_2]
+      cxxCompilerVersions: [16_0]
       platforms: [x64]
       tag: 'optimized'
       cmakeBuildConfigurations: [Release]
@@ -68,10 +68,10 @@ jobs:
       cxxSanitizers: [AddressSanitizer, UndefinedBehaviorSanitizer]
       tag: 'sanitize'
 
-    - os: Linux
-      cxxCompiler: Clang
-      cxxCompilerVersions: [18]
-      platforms: [x64]
+    #- os: Linux
+    #  cxxCompiler: Clang
+    #  cxxCompilerVersions: [19]
+    #  platforms: [x64]
 
     - os: Linux
       cxxCompiler: Clang
