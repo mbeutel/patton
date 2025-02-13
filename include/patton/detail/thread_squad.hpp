@@ -36,14 +36,19 @@ struct task_context_factory
     }
 };
 
+struct thread_squad_task_params
+{
+    int concurrency = 0;
+    bool join_requested = false;
+};
+
 struct thread_squad_task
 {
 protected:
     ~thread_squad_task() = default;  // intentionally non-virtual – the lifetime of the object is not managed through a base class pointer
 
 public:
-    int concurrency = 0;
-    bool join_requested = false;
+    thread_squad_task_params params;
 
     virtual void
     execute(thread_squad_impl_base& impl, int i) = 0;

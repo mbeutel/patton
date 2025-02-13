@@ -1,5 +1,5 @@
 
-#define DEBUG_WAIT_CHAIN
+//#define DEBUG_WAIT_CHAIN
 #ifdef DEBUG_WAIT_CHAIN
 # include <cstdio>
 # define THREAD_SQUAD_DBG(...) std::printf(__VA_ARGS__); std::fflush(stdout)
@@ -554,22 +554,19 @@ public:
         thread_squad_task&
         task_wait() noexcept
         {
-            gsl_Assert(threadSquad_.task_ != nullptr);
-
             auto& notifyData = threadSquad_.threadNotifyData_[threadIdx_];
             auto currentSense = outgoing_.load(std::memory_order_relaxed);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
             detail::wait_and_load(notifyData.mutex, notifyData.cv, incoming_, currentSense);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
+            gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
         }
 
         void
         task_run(thread_squad_task& task) const noexcept
         {
-            gsl_Assert(threadSquad_.task_ != nullptr);
-
-            if (threadIdx_ < task.concurrency)
+            if (threadIdx_ < task.params.concurrency)
             {
                     // Like the parallel overloads of the standard algorithms, we terminate (implicitly) if an exception is thrown
                     // by a task because the semantics of exceptions in multiplexed actions are unclear.
@@ -621,9 +618,9 @@ private:
     int
     num_threads_for_task() const noexcept
     {
-        return task_ == nullptr || task_->join_requested
+        return task_ == nullptr || task_->params.join_requested
             ? numThreads
-            : task_->concurrency;
+            : task_->params.concurrency;
     }
 
     static int
@@ -790,14 +787,18 @@ run_thread(thread_squad_impl::thread_data& threadData)
     int pass = 0;
     for (;;)
     {
-        auto& task = threadData.task_wait();
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: beginning pass %d\n", threadData.thread_idx(), pass);
-        if (pass > 0)
+        bool joinRequested;
         {
-            threadData.notify_subthreads();
+            auto& task = threadData.task_wait();  // must not be referenced after signaling completion!
+            joinRequested = task.params.join_requested;
+            THREAD_SQUAD_DBG("patton thread squad, thread %d: beginning pass %d\n", threadData.thread_idx(), pass);
+            if (pass > 0)
+            {
+                threadData.notify_subthreads();
+            }
+            threadData.task_run(task);
+            threadData.wait_for_subthreads();
         }
-        threadData.task_run(task);
-        threadData.wait_for_subthreads();
         threadData.task_signal_completion();
 
             // We only require `pass > 0` on all passes after the first one, so clamp the value to avoid UB and wraparound.
@@ -806,7 +807,7 @@ run_thread(thread_squad_impl::thread_data& threadData)
             ++pass;
         }
 
-        if (task.join_requested) break;
+        if (joinRequested) break;
     }
     THREAD_SQUAD_DBG("patton thread squad, thread %d: exiting after %d passes\n", threadData.thread_idx(), pass);
 }
@@ -830,7 +831,7 @@ static void
 run(thread_squad_impl& self, detail::thread_squad_task& op)
 noexcept  // We cannot really handle exceptions here.
 {
-    bool haveWork = (op.concurrency != 0) || (op.join_requested && self.is_running());
+    bool haveWork = (op.params.concurrency != 0) || (op.params.join_requested && self.is_running());
 
     if (haveWork)
     {
@@ -838,7 +839,7 @@ noexcept  // We cannot really handle exceptions here.
         {
             THREAD_SQUAD_DBG("patton thread squad: setting up\n");
         }
-        if (op.join_requested)
+        if (op.params.join_requested)
         {
             THREAD_SQUAD_DBG("patton thread squad: tearing down\n");
         }
@@ -852,7 +853,7 @@ noexcept  // We cannot really handle exceptions here.
         {
             self.fork_all_threads();
         }
-        if (!op.join_requested)
+        if (!op.params.join_requested)
         {
             self.wait_for_thread(-1, 0, false); // no spin wait in main thread
         }
@@ -933,7 +934,7 @@ thread_squad_impl_deleter::operator ()(thread_squad_impl_base* base)
     auto memGuard = std::unique_ptr<thread_squad_impl>(impl);
 
     auto noOpTask = thread_squad_nop{ };
-    noOpTask.join_requested = true;
+    noOpTask.params.join_requested = true;
     detail::run(*impl, noOpTask);
 }
 
@@ -975,7 +976,7 @@ void
 thread_squad::do_run(detail::thread_squad_task& op)
 {
     auto impl = static_cast<detail::thread_squad_impl*>(handle_.get());
-    if (!op.join_requested)
+    if (!op.params.join_requested)
     {
         detail::run(*impl, op);
     }

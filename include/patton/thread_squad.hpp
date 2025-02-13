@@ -160,7 +160,7 @@ public:
             concurrency = handle_->numThreads;
     }
         auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
-        op.concurrency = concurrency;
+        op.params.concurrency = concurrency;
         do_run(op);
     }
 
@@ -183,8 +183,8 @@ public:
             concurrency = handle_->numThreads;
     }
         auto op = detail::thread_squad_action<task_context, ActionT>(std::move(action));
-        op.concurrency = concurrency;
-        op.join_requested = true;
+        op.params.concurrency = concurrency;
+        op.params.join_requested = true;
         do_run(op);
     }
 };
