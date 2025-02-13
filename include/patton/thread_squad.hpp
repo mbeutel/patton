@@ -77,9 +77,10 @@ public:
     private:
         detail::thread_squad_impl_base& impl_;
         int threadIdx_;
+        int numRunningThreads_;
 
-        task_context(detail::thread_squad_impl_base& _impl, int _threadIdx) noexcept
-            : impl_(_impl), threadIdx_(_threadIdx)
+        task_context(detail::thread_squad_impl_base& _impl, int _threadIdx, int _numRunningThreads) noexcept
+            : impl_(_impl), threadIdx_(_threadIdx), numRunningThreads_(_numRunningThreads)
         {
         }
 
@@ -94,12 +95,12 @@ public:
         }
 
             //
-            // The number of concurrent threads.
+            // The number of concurrent threads currently executing the task.
             //
         [[nodiscard]] int
         num_threads() const noexcept
         {
-            return impl_.numThreads;
+            return numRunningThreads_;
         }
     };
 
@@ -191,6 +192,65 @@ public:
         op.params.concurrency = concurrency;
         op.params.join_requested = true;
         do_run(op);
+    }
+
+        //
+        // Runs `transform` on `concurrency` threads and waits until all tasks have run to completion, then reduces
+        // the results using the `reduce` operator.
+        //ᅟ
+        // `concurrency` must not exceed the number of threads in the thread squad. A value of -1 indicates that all available
+        // threads shall be used.
+        // The thread squad makes a dedicated copy of `transform` for every participating thread and invokes it with an appropriate
+        // task context. If `transform()` or `reduce()` throws an exception, `std::terminate()` is called.
+        //
+    template <std::invocable<task_context> TransformFuncT, typename T, typename ReduceOpT>
+    T
+    transform_reduce(TransformFuncT transform, T init, ReduceOpT reduce, int concurrency = -1) &
+    {
+        gsl_Expects(concurrency >= -1 && concurrency <= handle_->numThreads);
+
+        if (concurrency == -1)
+        {
+            concurrency = handle_->numThreads;
+        }
+
+        auto data = std::make_unique<detail::thread_reduce_data<T>[]>(1 + concurrency);
+        data[0].value = std::move(init);
+        auto op = detail::thread_squad_transform_reduce_operation<task_context, TransformFuncT, T, ReduceOpT>(std::move(transform), std::move(reduce), data.get() + 1);
+        op.params.concurrency = concurrency;
+        do_run(op);
+        auto result = std::move(data[0].value);
+        return result;
+    }
+
+        //
+        // Runs `transform` on `concurrency` threads and waits until all tasks have run to completion, then reduces
+        // the results using the `reduce` operator.
+        //ᅟ
+        // `concurrency` must not exceed the number of threads in the thread squad. A value of -1 indicates that all available
+        // threads shall be used.
+        // The thread squad makes a dedicated copy of `transform` for every participating thread and invokes it with an appropriate
+        // task context. If `transform()` or `reduce()` throws an exception, `std::terminate()` is called.
+        //
+    template <std::invocable<task_context> TransformFuncT, typename T, typename ReduceOpT>
+    T
+    transform_reduce(TransformFuncT transform, T init, ReduceOpT reduce, int concurrency = -1) &&
+    {
+        gsl_Expects(concurrency >= -1 && concurrency <= handle_->numThreads);
+
+        if (concurrency == -1)
+        {
+            concurrency = handle_->numThreads;
+        }
+
+        auto data = std::make_unique<detail::thread_reduce_data<T>[]>(1 + concurrency);
+        data[0].value = std::move(init);
+        auto op = detail::thread_squad_transform_reduce_operation<task_context, TransformFuncT, T, ReduceOpT>(std::move(transform), std::move(reduce), data.get() + 1);
+        op.params.concurrency = concurrency;
+        op.params.join_requested = true;
+        do_run(op);
+        auto result = std::move(data[0].value);
+        return result;
     }
 };
 

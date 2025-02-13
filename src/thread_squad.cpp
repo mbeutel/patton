@@ -10,6 +10,8 @@
 #include <new>
 #include <string>
 #include <memory>              // for unique_ptr<>
+#include <atomic>
+#include <thread>
 #include <cstddef>             // for size_t, ptrdiff_t
 #include <cstring>             // for wcslen(), swprintf()
 #include <utility>             // for move()
@@ -18,8 +20,6 @@
 #include <stdexcept>           // for range_error
 #include <type_traits>         // for remove_pointer<>
 #include <system_error>
-#include <thread>
-#include <atomic>
 
 #if defined(_WIN32)
 # ifndef NOMINMAX
@@ -59,9 +59,7 @@
 #endif // _MSC_VER
 
 
-namespace patton {
-
-namespace detail {
+namespace patton::detail {
 
 
 #if defined(_WIN32)
@@ -561,7 +559,7 @@ public:
             {
                     // Like the parallel overloads of the standard algorithms, we terminate (implicitly) if an exception is thrown
                     // by a task because the semantics of exceptions in multiplexed actions are unclear.
-                task.execute(threadSquad_, threadIdx_);
+                task.execute(threadSquad_, threadIdx_, task.params.concurrency);
             }
         }
 
@@ -730,6 +728,7 @@ public:
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaiting %d for outgoing sense %d\n", callingThreadIdx, targetThreadIdx, currentSense);
         detail::wait_and_load(threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited %d\n", callingThreadIdx, targetThreadIdx);
+        task_->merge(callingThreadIdx, targetThreadIdx);
     }
 
     void
@@ -812,10 +811,10 @@ run_thread(thread_squad_impl::thread_data& threadData)
 
 
 static void
-run(thread_squad_impl& self, detail::thread_squad_task& op)
+run(thread_squad_impl& self, detail::thread_squad_task& task)
 noexcept  // We cannot really handle exceptions here.
 {
-    bool haveWork = (op.params.concurrency != 0) || (op.params.join_requested && self.is_running());
+    bool haveWork = (task.params.concurrency != 0) || (task.params.join_requested && self.is_running());
 
     if (haveWork)
     {
@@ -823,12 +822,12 @@ noexcept  // We cannot really handle exceptions here.
         {
             THREAD_SQUAD_DBG("patton thread squad: setting up\n");
         }
-        if (op.params.join_requested)
+        if (task.params.join_requested)
         {
             THREAD_SQUAD_DBG("patton thread squad: tearing down\n");
         }
 
-        self.store_task(op);
+        self.store_task(task);
         if (self.is_running())
         {
             self.notify_thread(-1, 0);
@@ -837,7 +836,7 @@ noexcept  // We cannot really handle exceptions here.
         {
             self.fork_all_threads();
         }
-        if (!op.params.join_requested)
+        if (!task.params.join_requested)
         {
             self.wait_for_thread(-1, 0, wait_mode::wait); // no spin wait in main thread
         }
@@ -899,13 +898,19 @@ thread_squad_thread_func(void* ctx)
 #endif
 
 
+void
+thread_squad_task::merge([[maybe_unused]] int iDst, [[maybe_unused]] int iSrc)
+{
+}
+
+
 struct alignas(std::hardware_destructive_interference_size) thread_squad_nop : thread_squad_task
 {
 public:
     ~thread_squad_nop() = default;
 
     void
-    execute([[maybe_unused]] thread_squad_impl_base& impl, [[maybe_unused]] int i) override
+    execute([[maybe_unused]] thread_squad_impl_base& impl, [[maybe_unused]] int i, [[maybe_unused]] int numRunningThreads) override
     {
     }
 };
@@ -923,7 +928,9 @@ thread_squad_impl_deleter::operator ()(thread_squad_impl_base* base)
 }
 
 
-} // namespace detail
+} // namespace patton::detail
+
+namespace patton {
 
 
 detail::thread_squad_handle
@@ -957,18 +964,18 @@ thread_squad::create(thread_squad::params p)
 }
 
 void
-thread_squad::do_run(detail::thread_squad_task& op)
+thread_squad::do_run(detail::thread_squad_task& task)
 {
     auto impl = static_cast<detail::thread_squad_impl*>(handle_.get());
-    if (!op.params.join_requested)
+    if (!task.params.join_requested)
     {
-        detail::run(*impl, op);
+        detail::run(*impl, task);
     }
     else
     {
         auto memGuard = std::unique_ptr<detail::thread_squad_impl>(impl);
         detail::thread_squad_handle(std::move(handle_)).release();
-        detail::run(*impl, op);
+        detail::run(*impl, task);
     }
 }
 

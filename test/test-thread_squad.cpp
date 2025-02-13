@@ -118,4 +118,35 @@ TEST_CASE("thread_squad")
 
         CHECK(count == int(numActualThreads * (numActualThreads + 1) / 2));
     }
+
+    SECTION("reduction")
+    {
+        int numToSum = GENERATE(10'000);
+        int sumOfNum = numToSum*(numToSum + 1)/2;
+    
+        auto threadSquad = patton::thread_squad(params);
+        for (int i = 1; i <= int(numActualThreads); ++i)
+        {
+            CAPTURE(i);
+            int sum = threadSquad.transform_reduce(
+                [numToSum]
+                (patton::thread_squad::task_context const& ctx)
+                {
+                    int partition = ((numToSum+1) + ctx.num_threads() - 1)/ctx.num_threads();
+                    int first = ctx.thread_index()*partition;
+                    int last = std::min<int>(first + partition, numToSum+1);
+                    int sum = 0;
+                    for (int i = first; i != last; ++i)
+                    {
+                        volatile int local = i;  // prevent the compiler (Clang, in particular) from optimizing this further
+                        sum += local;
+                    }
+                    return sum;
+                },
+                0,
+                std::plus<>{ },
+                i);
+            CHECK(sum == sumOfNum);
+        }
+    }
 }
