@@ -195,8 +195,15 @@ TEST_CASE("thread_squad")
                         {
                             return non_default_initializable(lhs.value + rhs.value);
                         }).value;
+                    int sum2 = ctx.reduce_transform(
+                        partialSum,
+                        [](int lhs, int rhs)
+                        {
+                            return lhs + rhs;
+                        },
+                        std::identity{ });
 
-                    return non_default_initializable(sum == sumOfNum);
+                    return non_default_initializable(sum == sumOfNum && sum2 == sumOfNum);
                 },
                 [](non_default_initializable<bool> lhs, non_default_initializable<bool> rhs)
                 {
