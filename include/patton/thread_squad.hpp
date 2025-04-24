@@ -1,4 +1,4 @@
-
+﻿
 #ifndef INCLUDED_PATTON_THREAD_SQUAD_HPP_
 #define INCLUDED_PATTON_THREAD_SQUAD_HPP_
 
@@ -136,15 +136,15 @@ public:
         template <std::copyable T, detail::reduction<T> ReduceOpT, std::invocable<T> TransformFuncT>
         auto
         reduce_transform(T value, ReduceOpT reduceOp, TransformFuncT transformFunc) noexcept
-            -> std::decay_t<decltype(transform(value))>
+            -> std::decay_t<decltype(transformFunc(value))>
         {
-            using R = std::decay_t<decltype(transform(value))>;
+            using R = std::decay_t<decltype(transformFunc(value))>;
 
             auto synchronizer = detail::task_context_reduce_transform_synchronizer<T, ReduceOpT, R>(std::move(value), reduceOp);
             collect(synchronizer);
             if (threadIdx_ == 0)
             {
-                synchronizer.data.result = transform(std::move(synchronizer.data.value));
+                synchronizer.data.result = transformFunc(std::move(synchronizer.data.value));
             }
             broadcast(synchronizer);
             return std::move(synchronizer.data).result;
