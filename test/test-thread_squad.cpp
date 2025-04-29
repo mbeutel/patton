@@ -202,7 +202,6 @@ TEST_CASE("thread_squad")
                             return lhs + rhs;
                         },
                         std::identity{ });
-
                     return non_default_initializable(sum == sumOfNum && sum2 == sumOfNum);
                 },
                 [](non_default_initializable<bool> lhs, non_default_initializable<bool> rhs)
