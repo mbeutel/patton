@@ -1,17 +1,15 @@
-
+﻿
 # patton C++ library
 # Author: Moritz Beutel
 # unit tests
 
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.30)
 
 # dependencies
 find_package(Threads REQUIRED)
-find_package(gsl-lite 0.42 REQUIRED)
-find_package(Catch2 REQUIRED)
-
-include(TargetCompileSettings)
+find_package(gsl-lite 0.43 REQUIRED)
+find_package(Catch2 3 REQUIRED)
 
 # test target
 add_executable(test-patton
@@ -23,9 +21,6 @@ add_executable(test-patton
 )
 
 # compiler settings
-cmakeshift_target_compile_settings(test-patton
-    SOURCE_FILE_ENCODING "UTF-8"
-)
 target_compile_features(test-patton
     PRIVATE
         cxx_std_20

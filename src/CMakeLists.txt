@@ -1,14 +1,14 @@
-
+﻿
 # patton C++ library
 # Author: Moritz Beutel
 # patton library target
 
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.30)
 
 # dependencies
 find_package(Threads REQUIRED)
-find_package(gsl-lite 0.42 REQUIRED)
+find_package(gsl-lite 0.43 REQUIRED)
 
 # library target
 add_library(patton STATIC
@@ -32,10 +32,6 @@ target_compile_features(patton
 )
 
 # compiler settings
-include(TargetCompileSettings)
-cmakeshift_target_compile_settings(patton
-    SOURCE_FILE_ENCODING "UTF-8"
-)
 target_precompile_headers(patton
     PRIVATE
         # C standard library

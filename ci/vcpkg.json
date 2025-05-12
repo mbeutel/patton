@@ -1,0 +1,8 @@
+﻿{
+    "name": "patton-ci",
+    "dependencies": [
+        "gsl-lite",
+        "catch2",
+        "nanobench"
+    ]
+}

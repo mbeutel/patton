@@ -1,4 +1,4 @@
-
+﻿
 trigger:
 - master
 - mr/*
@@ -16,9 +16,7 @@ resources:
 jobs:
 - template: azure-pipelines/cmake.yml@CImakeshift
   parameters:
-    vcpkgRef: 74ec888e385d189b42d6b398d0bbaa6f1b1d3b0e
-      
-    cmakeConfigArgs: '-DPATTON_BUILD_TESTING=ON -DPATTON_BUILD_BENCHMARKS=ON'
+    vcpkgRef: ca846b21276c9a3171074ac8d2b4f6516894a7d0
 
     cmakeBuildConfigurations: [Debug]
 
@@ -29,44 +27,49 @@ jobs:
       cxxCompilerVersions: [VS2022]
       platforms: [x86, x64]
       tag: 'optimized'
-      cmakeBuildConfigurations: [Release]
+      cmakeBuildConfigurations: [RelWithDebInfo]
+      cmakeConfigPreset: 'ci-msvc'
 
     - os: Linux
       cxxCompiler: GCC
       cxxCompilerVersions: [14]
       platforms: [x64]
       tag: 'optimized'
-      cmakeBuildConfigurations: [Release]
+      cmakeBuildConfigurations: [RelWithDebInfo]
+      cmakeConfigPreset: 'ci-gcc'
 
     - os: MacOS
       cxxCompiler: AppleClang
       cxxCompilerVersions: [16_0]
       platforms: [x64]
       tag: 'optimized'
-      cmakeBuildConfigurations: [Release]
+      cmakeBuildConfigurations: [RelWithDebInfo]
+      cmakeConfigPreset: 'ci-clang'
 
     - os: Windows
       cxxCompiler: MSVC
       cxxCompilerVersions: [VS2019, VS2022]
       platforms: [x86, x64]
+      cmakeConfigPreset: 'ci-msvc'
 
     - os: Windows
       cxxCompiler: Clang
       cxxCompilerVersions: [VS2019, VS2022]
       platforms: [x86, x64]
+      cmakeConfigPreset: 'ci-clang-cl'
 
     - os: Linux
       cxxCompiler: GCC
       cxxCompilerVersions: [12, 13]
       platforms: [x64]
+      cmakeConfigPreset: 'ci-gcc'
 
     - os: Linux
       cxxCompiler: GCC
       cxxCompilerVersions: [14]
       platforms: [x64]
-      cxxStandardLibraryDebugMode: true
-      cxxSanitizers: [AddressSanitizer, UndefinedBehaviorSanitizer]
       tag: 'sanitize'
+      cmakeConfigPreset: 'ci-gcc-sanitize'
 
     #- os: Linux
     #  cxxCompiler: Clang
@@ -77,9 +80,8 @@ jobs:
       cxxCompiler: Clang
       cxxCompilerVersions: [19]
       platforms: [x64]
-      cxxStandardLibraryDebugMode: true
-      cxxSanitizers: [AddressSanitizer, UndefinedBehaviorSanitizer, ImplicitIntegerArithmeticValueChange]
       tag: 'sanitize'
+      cmakeConfigPreset: 'ci-clang-sanitize'
 
     - os: Linux
       cxxCompiler: Clang
@@ -87,11 +89,13 @@ jobs:
       platforms: [x64]
       tag: 'optimized'
       cmakeBuildConfigurations: [Release]
+      cmakeConfigPreset: 'ci-clang'
 
     - os: MacOS
       cxxCompiler: GCC
       cxxCompilerVersions: [12, 13]
       platforms: [x64]
+      cmakeConfigPreset: 'ci-gcc'
 
     - os: MacOS
       cxxCompiler: GCC
@@ -99,8 +103,10 @@ jobs:
       platforms: [x64]
       tag: 'optimized'
       cmakeBuildConfigurations: [Release]
+      cmakeConfigPreset: 'ci-gcc'
 
     - os: MacOS
       cxxCompiler: AppleClang
       cxxCompilerVersions: [16_0]
       platforms: [x64]
+      cmakeConfigPreset: 'ci-clang'

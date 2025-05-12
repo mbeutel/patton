@@ -1,25 +1,20 @@
-
+﻿
 # patton C++ library
 # Author: Moritz Beutel
 # benchmarks
 
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.30)
 
 # dependencies
 find_package(Threads REQUIRED)
-find_package(gsl-lite 0.42 REQUIRED)
-find_package(Catch2 REQUIRED)
-
-include(TargetCompileSettings)
+find_package(gsl-lite 0.43 REQUIRED)
+find_package(Catch2 3 REQUIRED)
 
 # benchmark runner target
 add_library(benchmark-patton-runner OBJECT "main.cpp")
 target_compile_features(benchmark-patton-runner PRIVATE cxx_std_20)
 target_compile_definitions(benchmark-patton-runner PRIVATE CATCH_CONFIG_ENABLE_BENCHMARKING)
-cmakeshift_target_compile_settings(benchmark-patton-runner
-    SOURCE_FILE_ENCODING "UTF-8"
-)
 target_link_libraries(benchmark-patton-runner
     PRIVATE
         Catch2::Catch2
@@ -34,9 +29,6 @@ add_executable(benchmark-patton
 target_include_directories(benchmark-patton
     PRIVATE
         "${PROJECT_SOURCE_DIR}/test/benchmark"
-)
-cmakeshift_target_compile_settings(benchmark-patton
-    SOURCE_FILE_ENCODING "UTF-8"
 )
 target_compile_features(benchmark-patton
     PRIVATE
