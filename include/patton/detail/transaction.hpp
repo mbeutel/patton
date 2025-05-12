@@ -1,9 +1,9 @@
-
+﻿
 #ifndef INCLUDED_PATTON_DETAIL_TRANSACTION_HPP_
 #define INCLUDED_PATTON_DETAIL_TRANSACTION_HPP_
 
 
-#include <utility>      // for move(), exchange()
+#include <utility>      // for move()
 #include <type_traits>  // for integral_constant<>
 
 
@@ -37,11 +37,7 @@ public:
         done_ = true;
     }
 
-    constexpr transaction_t(transaction_t&& rhs) // pre-C++17 tax
-        : RollbackFuncT(std::move(rhs)), done_(std::exchange(rhs.done_, true))
-    {
-
-    }
+    constexpr transaction_t(transaction_t&& rhs) = delete;
     transaction_t&
     operator =(transaction_t&&) = delete;
 };
