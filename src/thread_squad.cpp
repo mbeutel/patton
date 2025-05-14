@@ -509,8 +509,9 @@ public:
     private:
             // structure
         thread_squad_impl& threadSquad_;
-        int threadIdx_;
-        int numSubthreads_;
+        int threadIdx_ = -1;
+        int numSubthreads_ = -1;
+        int pass_ = 0;
 
             // resources
         os_thread osThread_;
@@ -521,6 +522,14 @@ public:
         std::atomic<int> upward_;    // synchronization point collection
         std::atomic<int> downward_;  // synchronization point distribution
         void* syncData_;             // synchronization data made accessible to the superordinate thread between collection and distribution
+
+        int
+        num_threads_for_task() const noexcept
+        {
+            return (pass_ == 0 || threadSquad_.task_ == nullptr || threadSquad_.task_->params.join_requested)  // check for `pass_ == 0` only when using hierarchical thread management
+                ? threadSquad_.numThreads
+                : threadSquad_.task_->params.concurrency;
+        }
 
     public:
         thread_data(thread_squad_impl& _impl) noexcept
@@ -533,24 +542,55 @@ public:
         {
         }
 
+        bool
+        is_initial_pass() const noexcept
+        {
+            return pass_ == 0;
+        }
+
+        void
+        next_pass() noexcept
+        {
+                // We only require `pass > 0` on all passes after the first one, so clamp the value to avoid UB and wraparound.
+            if (pass_ < std::numeric_limits<int>::max())
+            {
+                ++pass_;
+            }
+        }
+
+        int
+        pass() const noexcept
+        {
+            return pass_;
+        }
+
         void
         notify_subthreads() noexcept
         {
-            int numThreadsToWake = threadSquad_.num_threads_for_task();
+            int numThreadsToWake = num_threads_for_task();
             threadSquad_.notify_subthreads(threadIdx_, numThreadsToWake);
         }
 
         void
         wait_for_subthreads() noexcept
         {
-            int numThreadsToWaitFor = threadSquad_.num_threads_for_task();
+            int numThreadsToWaitFor = num_threads_for_task();
             threadSquad_.wait_for_subthreads(threadIdx_, numThreadsToWaitFor);
+        }
+
+        void
+        notify_and_fork_subthreads() noexcept
+        {
+            int numThreadsToWake = num_threads_for_task();
+            gsl_Assert(numThreadsToWake == threadSquad_.numThreads);
+            threadSquad_.notify_and_fork_subthreads(threadIdx_, numThreadsToWake);
         }
 
         void
         join_subthreads() noexcept
         {
-            int numThreadsToWaitFor = threadSquad_.num_threads_for_task();
+            int numThreadsToWaitFor = num_threads_for_task();
+            gsl_Assert(numThreadsToWaitFor == threadSquad_.numThreads);
             threadSquad_.join_subthreads(threadIdx_, numThreadsToWaitFor);
         }
 
@@ -610,13 +650,13 @@ private:
     detail::thread_squad_task* task_;
 
 
-    int
-    num_threads_for_task() const noexcept
-    {
-        return task_ == nullptr || task_->params.join_requested
-            ? numThreads
-            : task_->params.concurrency;
-    }
+    //int
+    //num_threads_for_task() const noexcept
+    //{
+    //    return task_ == nullptr || task_->params.join_requested
+    //        ? numThreads
+    //        : task_->params.concurrency;
+    //}
 
     static int
     next_substride(int stride) noexcept
@@ -728,21 +768,21 @@ public:
         return threadData_[0].osThread_.have_thread_handle();
     }
 
-    void
-    fork_all_threads()
-    {
-        int numThreadsToWake = num_threads_for_task();
-        for (int i = 0; i < numThreadsToWake; ++i)
-        {
-            THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
-            detail::toggle_and_notify(threadData_[i].incoming_);
-        }
-        for (int i = 0; i < numThreads; ++i)
-        {
-            THREAD_SQUAD_DBG("patton thread squad, thread -1: forking %d\n", i);
-            threadData_[i].osThread_.fork(thread_squad_thread_func, thread_context_for(i));
-        }
-    }
+    //void
+    //fork_all_threads()
+    //{
+    //    int numThreadsToWake = num_threads_for_task();
+    //    for (int i = 0; i < numThreadsToWake; ++i)
+    //    {
+    //        THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
+    //        detail::toggle_and_notify(threadData_[i].incoming_);
+    //    }
+    //    for (int i = 0; i < numThreads; ++i)
+    //    {
+    //        THREAD_SQUAD_DBG("patton thread squad, thread -1: forking %d\n", i);
+    //        threadData_[i].osThread_.fork(thread_squad_thread_func, thread_context_for(i));
+    //    }
+    //}
 
     //void
     //join_all_threads()
@@ -770,11 +810,18 @@ public:
         detail::wait_and_load(threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited %d\n", callingThreadIdx, targetThreadIdx);
 
-            // Merge results unless we are on the main thread.
-        if (callingThreadIdx >= 0)
+            // Merge results if the target thread participated in the task and if we are not on the main thread.
+        if (callingThreadIdx >= 0 && targetThreadIdx < task_->params.concurrency)
         {
             task_->merge(callingThreadIdx, targetThreadIdx);
         }
+    }
+
+    void
+    fork_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
+    {
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: forking %d\n", callingThreadIdx, targetThreadIdx);
+        threadData_[targetThreadIdx].osThread_.fork(thread_squad_thread_func, thread_context_for(targetThreadIdx));
     }
 
     void
@@ -805,6 +852,19 @@ public:
             (int callingThreadIdx, int targetThreadIdx)
             {
                 wait_for_thread(callingThreadIdx, targetThreadIdx, waitMode_);
+            });
+    }
+
+    void
+    notify_and_fork_subthreads(int callingThreadIdx, int _concurrency) noexcept
+    {
+        to_subthreads(
+            callingThreadIdx, _concurrency,
+            [this]
+            (int callingThreadIdx, int targetThreadIdx)
+            {
+                notify_thread(callingThreadIdx, targetThreadIdx);
+                fork_thread(callingThreadIdx, targetThreadIdx);
             });
     }
 
@@ -877,15 +937,17 @@ public:
 static void
 run_thread(thread_squad_impl::thread_data& threadData)
 {
-    int pass = 0;
-    for (;;)
+    THREAD_SQUAD_DBG("patton thread squad, thread %d: starting\n", threadData.thread_idx());
+    threadData.notify_and_fork_subthreads();
+
+    bool joinRequested;
+    do
     {
-        bool joinRequested;
         {
             auto& task = threadData.task_wait();  // must not be referenced after signaling completion!
             joinRequested = task.params.join_requested;
-            THREAD_SQUAD_DBG("patton thread squad, thread %d: beginning pass %d\n", threadData.thread_idx(), pass);
-            if (pass > 0)
+            THREAD_SQUAD_DBG("patton thread squad, thread %d: beginning pass %d\n", threadData.thread_idx(), threadData.pass());
+            if (!threadData.is_initial_pass())
             {
                 threadData.notify_subthreads();
             }
@@ -894,19 +956,12 @@ run_thread(thread_squad_impl::thread_data& threadData)
         }
         threadData.task_signal_completion();
 
-            // We only require `pass > 0` on all passes after the first one, so clamp the value to avoid UB and wraparound.
-        if (pass < std::numeric_limits<int>::max())
-        {
-            ++pass;
-        }
+        threadData.next_pass();
+    } while (!joinRequested);
 
-        if (joinRequested)
-        {
-            threadData.join_subthreads();
-            break;
-        }
-    }
-    THREAD_SQUAD_DBG("patton thread squad, thread %d: exiting after %d passes\n", threadData.thread_idx(), pass);
+    threadData.join_subthreads();
+
+    THREAD_SQUAD_DBG("patton thread squad, thread %d: exiting after %d passes\n", threadData.thread_idx(), threadData.pass());
 }
 
 
@@ -941,14 +996,22 @@ noexcept  // We cannot really handle exceptions here.
             THREAD_SQUAD_DBG("patton thread squad: tearing down\n");
         }
 
+        // We can either use global thread management (`fork_all_threads()` and `join_all_threads()`) or hierarchical thread management (`fork_thread(-1, 0)` and `join_thread(-1, 0)`),
+        // but we cannot mix them. Otherwise, thread handles are created and joined by different threads, which leads to ordering issues without explicit synchronization.
+
         self.store_task(task);
-        if (self.have_thread_handle())
+        //if (self.have_thread_handle())
+        //{
+        //    self.notify_thread(-1, 0);
+        //}
+        //else
+        //{
+        //    self.fork_all_threads();
+        //}
+        self.notify_thread(-1, 0);
+        if (!self.have_thread_handle())
         {
-            self.notify_thread(-1, 0);
-        }
-        else
-        {
-            self.fork_all_threads();
+            self.fork_thread(-1, 0);
         }
         self.wait_for_thread(-1, 0, wait_mode::wait); // no spin wait in main thread
         if (task.params.join_requested)
