@@ -1,9 +1,8 @@
-
+﻿
 #ifndef INCLUDED_PATTON_DETAIL_THREAD_SQUAD_HPP_
 #define INCLUDED_PATTON_DETAIL_THREAD_SQUAD_HPP_
 
 
-#include <new>
 #include <memory>       // for unique_ptr<>
 #include <optional>
 #include <concepts>
@@ -59,12 +58,16 @@ public:
     virtual void merge(int iDst, int iSrc) noexcept;
 };
 
+    // We define our own value here instead of referring to `std::hardware_destructive_interference_size` because that can change
+    // based on compiler flags and thus cause ABI breakage (which is why GCC issues a warning about it).
+static constexpr std::size_t destructive_interference_size = 64;
+
 #ifdef _MSC_VER
 # pragma warning(push)
 # pragma warning(disable: 4324)  // structure was padded due to alignment specifier
 #endif // _MSC_VER
 template <typename TaskContextT, typename ActionT>
-class alignas(std::hardware_destructive_interference_size) thread_squad_action : public thread_squad_task
+class alignas(destructive_interference_size) thread_squad_action : public thread_squad_task
 {
 private:
     ActionT action_;
@@ -86,13 +89,13 @@ public:
 };
 
 template <typename T>
-struct alignas(std::hardware_destructive_interference_size) thread_reduce_data
+struct alignas(destructive_interference_size) thread_reduce_data
 {
     std::optional<T> value;
 };
 
 template <typename TaskContextT, typename TransformFuncT, typename T, typename ReduceOpT>
-class alignas(std::hardware_destructive_interference_size) thread_squad_transform_reduce_operation : public thread_squad_task
+class alignas(destructive_interference_size) thread_squad_transform_reduce_operation : public thread_squad_task
 {
 private:
     TransformFuncT transform_;
@@ -141,20 +144,20 @@ public:
 };
 
 template <typename T>
-struct alignas(std::hardware_destructive_interference_size) thread_sync_reduce_data
+struct alignas(destructive_interference_size) thread_sync_reduce_data
 {
     T value;
 };
 
 template <typename T, typename R>
-struct alignas(std::hardware_destructive_interference_size) thread_sync_reduce_transform_data
+struct alignas(destructive_interference_size) thread_sync_reduce_transform_data
 {
     T value;
-    R result;
+    std::optional<R> result = std::nullopt;
 };
 
 template <typename T, typename ReduceOpT>
-struct alignas(std::hardware_destructive_interference_size) task_context_reduce_synchronizer : task_context_synchronizer
+struct alignas(destructive_interference_size) task_context_reduce_synchronizer : task_context_synchronizer
 {
     thread_sync_reduce_data<T> data;
     ReduceOpT& reduce;
@@ -184,7 +187,7 @@ struct alignas(std::hardware_destructive_interference_size) task_context_reduce_
     }
 };
 template <typename T, typename ReduceOpT, typename R>
-struct alignas(std::hardware_destructive_interference_size) task_context_reduce_transform_synchronizer : task_context_synchronizer
+struct alignas(destructive_interference_size) task_context_reduce_transform_synchronizer : task_context_synchronizer
 {
     thread_sync_reduce_transform_data<T, R> data;
     ReduceOpT& reduce;
@@ -210,7 +213,7 @@ struct alignas(std::hardware_destructive_interference_size) task_context_reduce_
     void
     broadcast(void* dst) noexcept override
     {
-        static_cast<thread_sync_reduce_transform_data<T, R>*>(dst)->result = data.result;
+        static_cast<thread_sync_reduce_transform_data<T, R>*>(dst)->result = data.result.value();
     }
 };
 #ifdef _MSC_VER

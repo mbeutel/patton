@@ -1,4 +1,4 @@
-
+﻿
 //#define DEBUG_WAIT_CHAIN
 #ifdef DEBUG_WAIT_CHAIN
 # include <cstdio>
@@ -502,7 +502,7 @@ thread_squad_thread_func(void* data);
 class thread_squad_impl : public thread_squad_impl_base
 {
 public:
-    class alignas(std::hardware_destructive_interference_size) thread_data
+    class alignas(destructive_interference_size) thread_data
     {
         friend thread_squad_impl;
 
@@ -1030,7 +1030,7 @@ task_context_synchronizer::broadcast([[maybe_unused]] void* dst) noexcept
 }
 
 
-struct alignas(std::hardware_destructive_interference_size) thread_squad_nop : thread_squad_task
+struct alignas(destructive_interference_size) thread_squad_nop : thread_squad_task
 {
 public:
     ~thread_squad_nop() = default;

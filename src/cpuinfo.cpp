@@ -1,5 +1,4 @@
-
-#include <new>
+﻿
 #include <span>
 #include <atomic>
 #include <memory>     // for unique_ptr<>
@@ -145,10 +144,6 @@ init_cpu_info() noexcept
         }
 
         coreThreadIds.shrink_to_fit();
-        if (newCacheLineSize < std::hardware_constructive_interference_size)
-        {
-            gsl_FailFast();  // In this library we assume that `std::hardware_constructive_interference_size` at least acts as a lower bound for the cache line size.
-        }
         cpu_info_value.cache_line_size.store(newCacheLineSize, std::memory_order_relaxed);
 
 #elif defined(__linux__)
