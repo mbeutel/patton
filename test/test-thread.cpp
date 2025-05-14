@@ -1,4 +1,4 @@
-
+﻿
 #include <thread>  // for thread::hardware_concurrency()
 
 #include <patton/thread.hpp>
@@ -39,6 +39,6 @@ TEST_CASE("physical_core_ids() returns correct number of thread ids")
 
     if (!physicalCoreIds.empty())
     {
-        CHECK(gsl_lite::ssize(physicalCoreIds) == physicalConcurrency);
+        CHECK(physicalCoreIds.size() == physicalConcurrency);
     }
 }
