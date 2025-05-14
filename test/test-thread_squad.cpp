@@ -1,4 +1,4 @@
-
+﻿
 #include <patton/thread.hpp>
 #include <patton/thread_squad.hpp>
 
@@ -201,7 +201,10 @@ TEST_CASE("thread_squad")
                         {
                             return lhs + rhs;
                         },
-                        std::identity{ });
+                        [](int value)
+                        {
+                            return non_default_initializable(value);
+                        }).value;
                     return non_default_initializable(sum == sumOfNum && sum2 == sumOfNum);
                 },
                 [](non_default_initializable<bool> lhs, non_default_initializable<bool> rhs)

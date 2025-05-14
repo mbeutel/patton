@@ -136,7 +136,6 @@ public:
         template <std::copyable T, detail::reduction<T> ReduceOpT, std::invocable<T> TransformFuncT>
         auto
         reduce_transform(T value, ReduceOpT reduceOp, TransformFuncT transformFunc) noexcept
-            -> std::decay_t<decltype(transformFunc(value))>
         {
             using R = std::decay_t<decltype(transformFunc(value))>;
 
@@ -147,7 +146,7 @@ public:
                 synchronizer.data.result = transformFunc(std::move(synchronizer.data.value));
             }
             broadcast(synchronizer);
-            return std::move(synchronizer.data).result;
+            return std::move(synchronizer.data).result.value();
         }
 
             //
