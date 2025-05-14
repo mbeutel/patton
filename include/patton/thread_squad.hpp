@@ -335,7 +335,7 @@ public:
         }
         else
         {
-            return std::move(init);
+            return init;
         }
     }
 
