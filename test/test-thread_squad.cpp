@@ -34,7 +34,8 @@ TEST_CASE("thread_squad")
     int numHardwareThreads = static_cast<int>(std::thread::hardware_concurrency());
     int numCores = static_cast<int>(patton::physical_concurrency());
 
-    GENERATE(range(0, 10)); // repetitions
+    int repetition = GENERATE(range(0, 10)); // repetitions
+    CAPTURE(repetition);
 
     int numThreads = GENERATE_COPY(range(0, 5), (numCores + 1)/2, numCores, numHardwareThreads, 3*numHardwareThreads/2, 2*numHardwareThreads);
     CAPTURE(numThreads);
@@ -55,6 +56,7 @@ TEST_CASE("thread_squad")
     };
 #ifdef THREAD_PINNING_SUPPORTED
     params.pin_to_hardware_threads = GENERATE(false, true);
+    CAPTURE(params.pin_to_hardware_threads);
 #endif // !THREAD_PINNING_SUPPORTED
 
     auto action = [&]
@@ -107,7 +109,8 @@ TEST_CASE("thread_squad")
 
     SECTION("no deadlocks")
     {
-        GENERATE(range(0, 3)); // more repetitions
+        int moreRepetitions = GENERATE(range(0, 3)); // repetitions
+        CAPTURE(moreRepetitions);
 
         int numTasks = GENERATE(0, 1, 2, 5, 10, 20);
         CAPTURE(numTasks);
@@ -135,6 +138,7 @@ TEST_CASE("thread_squad")
     SECTION("reduction")
     {
         int numToSum = GENERATE(10'000);
+        CAPTURE(numToSum);
         int sumOfNum = numToSum*(numToSum + 1)/2;
     
         auto threadSquad = patton::thread_squad(params);
@@ -169,6 +173,7 @@ TEST_CASE("thread_squad")
     SECTION("synchronization")
     {
         int numToSum = GENERATE(10'000);
+        CAPTURE(numToSum);
         int sumOfNum = numToSum*(numToSum + 1)/2;
     
         auto threadSquad = patton::thread_squad(params);
