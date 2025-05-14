@@ -10,7 +10,7 @@
 #include <utility>      // for forward<>()
 #include <type_traits>  // for integral_constant<>, declval<>(), void_t<>, negation<>
 
-#include <gsl-lite/gsl-lite.hpp>
+#include <gsl-lite/gsl-lite.hpp>  // for gsl_COMPILER_APPLECLANG_VERSION
 
 #include <patton/detail/transaction.hpp>
 
@@ -80,8 +80,13 @@ constexpr provides_static_alignment(std::size_t alignmentProvided, std::size_t a
     std::size_t basicAlignmentRequested = alignmentRequested & ~special_alignments;
     if ((alignmentProvided & special_alignments) != 0)
     {
+#if !gsl_BETWEEN(gsl_COMPILER_APPLECLANG_VERSION, 1, 1700)  // std::hardware_constructive_interference_size not available before AppleClang 17
             // Page alignment must also guarantee cache line alignment.
         basicAlignmentProvided |= std::hardware_constructive_interference_size;  // assumed to be a lower bound for the cache line size
+#else
+            // Just make an educated guess instead.
+        basicAlignmentProvided |= std::size_t(64);
+#endif
     }
 
     return detail::raw_alignment_in_bytes(basicAlignmentProvided) >= detail::raw_alignment_in_bytes(basicAlignmentRequested)
