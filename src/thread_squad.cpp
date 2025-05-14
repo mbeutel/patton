@@ -403,7 +403,7 @@ public:
     }
 
     bool
-    is_running() const noexcept
+    have_thread_handle() const noexcept
     {
 #if defined(_WIN32)
         return handle_ != nullptr;
@@ -417,7 +417,7 @@ public:
     void
     set_core_affinity(std::size_t _coreAffinity)
     {
-        gsl_Expects(!is_running());
+        gsl_Expects(!have_thread_handle());
 
         coreAffinity_ = _coreAffinity;
     }
@@ -425,7 +425,7 @@ public:
     void
     fork(thread_proc proc, void* ctx)
     {
-        gsl_Expects(!is_running());
+        gsl_Expects(!have_thread_handle());
 
 #if defined(_WIN32)
         DWORD threadCreationFlags = coreAffinity_ != std::size_t(-1) ? CREATE_SUSPENDED : 0;
@@ -456,7 +456,7 @@ public:
     void
     join()
     {
-        gsl_Expects(is_running());
+        gsl_Expects(have_thread_handle());
 
 #if defined(_WIN32)
         DWORD result = ::WaitForSingleObject(handle_.get(), INFINITE);
@@ -723,9 +723,9 @@ public:
     }
 
     bool
-    is_running() const noexcept
+    have_thread_handle() const noexcept
     {
-        return threadData_[0].osThread_.is_running();
+        return threadData_[0].osThread_.have_thread_handle();
     }
 
     void
@@ -928,11 +928,11 @@ static void
 run(thread_squad_impl& self, detail::thread_squad_task& task)
 noexcept  // We cannot really handle exceptions here.
 {
-    bool haveWork = (task.params.concurrency != 0) || (task.params.join_requested && self.is_running());
+    bool haveWork = (task.params.concurrency != 0) || (task.params.join_requested && self.have_thread_handle());
 
     if (haveWork)
     {
-        if (!self.is_running())
+        if (!self.have_thread_handle())
         {
             THREAD_SQUAD_DBG("patton thread squad: setting up\n");
         }
@@ -942,7 +942,7 @@ noexcept  // We cannot really handle exceptions here.
         }
 
         self.store_task(task);
-        if (self.is_running())
+        if (self.have_thread_handle())
         {
             self.notify_thread(-1, 0);
         }
