@@ -13,6 +13,7 @@ project(patton
 # Define build options.
 option(PATTON_BUILD_TESTING "Build tests" OFF)
 option(PATTON_BUILD_BENCHMARKS "Build benchmarks" OFF)
+set(PATTON_COMPILE_OPTIONS "" CACHE STRING "Extra compile options which should not be passed on when building dependencies (e.g. warning flags)")
 
 # Obtain source dependencies.
 # We use CPM to fetch dependencies in a stand-alone build but configure it to prefer packages provided through other means.

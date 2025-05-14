@@ -25,6 +25,10 @@ target_compile_features(test-patton
     PRIVATE
         cxx_std_20
 )
+target_compile_options(test-patton
+    PRIVATE
+        ${PATTON_COMPILE_OPTIONS}
+)
 target_precompile_headers(test-patton
     PRIVATE
         # C standard library
