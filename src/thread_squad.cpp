@@ -1,5 +1,5 @@
 ﻿
-//#define DEBUG_WAIT_CHAIN
+#define DEBUG_WAIT_CHAIN
 #ifdef DEBUG_WAIT_CHAIN
 # include <cstdio>
 # define THREAD_SQUAD_DBG(...) std::printf(__VA_ARGS__); std::fflush(stdout)
