@@ -48,6 +48,10 @@ target_precompile_headers(patton
         # other libraries
         <gsl-lite/gsl-lite.hpp>
 )
+target_compile_options(patton
+    PRIVATE
+        ${PATTON_COMPILE_OPTIONS}
+)
 
 if(MSVC)
     target_compile_definitions(patton
