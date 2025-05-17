@@ -97,7 +97,9 @@ init_cpu_info() noexcept
 {
     auto initFunc = []
     {
+#if defined(_WIN32)
         std::size_t newCacheLineSize = 0;
+#endif // defined(_WIN32)
         unsigned newPhysicalConcurrency = 0;
         std::vector<int> coreThreadIds;
 
