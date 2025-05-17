@@ -110,7 +110,11 @@ setCurrentThreadDescription(const wchar_t* threadDescription)
     {
         HMODULE hKernel32 = ::GetModuleHandleW(L"kernel32.dll");
         gsl_Expects(hKernel32 != NULL);
-        return reinterpret_cast<SetThreadDescriptionType*>(::GetProcAddress(hKernel32, "SetThreadDescriptionType"));  // available since Windows 10 1607 or Windows Server 2016
+
+            // Avoid warning about incompatible function pointers by casting to `void*` in between.
+        return reinterpret_cast<SetThreadDescriptionType*>(
+            reinterpret_cast<void*>(
+                ::GetProcAddress(hKernel32, "SetThreadDescriptionType")));  // available since Windows 10 1607 or Windows Server 2016
     }();
 
     if (setThreadDescription != nullptr)
