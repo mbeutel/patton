@@ -102,7 +102,6 @@ init_cpu_info() noexcept
 #endif // defined(_WIN32)
         unsigned newPhysicalConcurrency = 0;
         std::vector<int> coreThreadIds;
-        auto lresult = cpu_info{ };
 
 #if defined(_WIN32)
         std::unique_ptr<SYSTEM_LOGICAL_PROCESSOR_INFORMATION[]> dynSlpi;
