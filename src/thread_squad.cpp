@@ -110,7 +110,7 @@ setCurrentThreadDescription(const wchar_t* threadDescription)
     {
         HMODULE hKernel32 = ::GetModuleHandleW(L"kernel32.dll");
         gsl_Expects(hKernel32 != NULL);
-        return (SetThreadDescriptionType*) ::GetProcAddress(hKernel32, "SetThreadDescriptionType");  // available since Windows 10 1607 or Windows Server 2016
+        return reinterpret_cast<SetThreadDescriptionType*>(::GetProcAddress(hKernel32, "SetThreadDescriptionType"));  // available since Windows 10 1607 or Windows Server 2016
     }();
 
     if (setThreadDescription != nullptr)
@@ -1047,7 +1047,7 @@ thread_squad_thread_func(void* ctx)
     {
 #if defined(__linux__)
         char buf[64] { };
-        std::sprintf(buf, "squad thrd %d",
+        std::snprintf(buf, gsl_DIMENSION_OF(buf), "squad thrd %d",
             threadData.thread_idx());
         if (buf[15] != '\0')
         {
@@ -1058,7 +1058,7 @@ thread_squad_thread_func(void* ctx)
         detail::posix_check(::pthread_setname_np(::pthread_self(), buf));
 #elif defined(__APPLE__)
         char buf[64];
-        std::sprintf(buf, "patton thread squad, thread %d",
+        std::snprintf(buf, gsl_DIMENSION_OF(buf), "patton thread squad, thread %d",
             threadData.thread_idx());
         detail::posix_check(::pthread_setname_np(buf));
 #endif
