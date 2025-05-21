@@ -32,6 +32,12 @@
 #include <patton/detail/errors.hpp>
 
 
+namespace patton {
+
+namespace gsl = ::gsl_lite;
+
+} // namespace patton
+
 namespace patton::detail {
 
 
@@ -244,8 +250,6 @@ init_cpu_info() noexcept
 } // namespace patton::detail
 
 namespace patton {
-
-namespace gsl = ::gsl_lite;
 
 
 #if defined(_WIN32)
