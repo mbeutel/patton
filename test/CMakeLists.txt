@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.30)
 
 # dependencies
 find_package(Threads REQUIRED)
-find_package(gsl-lite 0.43 REQUIRED)
+find_package(gsl-lite 1.0 REQUIRED)
 find_package(Catch2 3 REQUIRED)
 
 # test target
@@ -66,7 +66,7 @@ target_compile_definitions(test-patton
 target_link_libraries(test-patton
     PRIVATE
         Threads::Threads
-        gsl::gsl-lite-v1
+        gsl-lite::gsl-lite
         Catch2::Catch2WithMain
         patton
 )

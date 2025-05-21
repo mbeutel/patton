@@ -22,7 +22,7 @@ option(CPM_LOCAL_PACKAGES_ONLY "Only use `find_package` to get dependencies" OFF
 set(CPM_SOURCE_CACHE "${CMAKE_BINARY_DIR}/CPM-cache")
 include(cmake/CPM.cmake)
 #CPMAddPackage(NAME fmt           GIT_TAG 11.1.3 GITHUB_REPOSITORY fmtlib/fmt          SYSTEM OFF)
-CPMAddPackage(NAME gsl-lite      VERSION 0.43.0 GITHUB_REPOSITORY gsl-lite/gsl-lite   SYSTEM OFF)
+CPMAddPackage(NAME gsl-lite      VERSION  1.0.1 GITHUB_REPOSITORY gsl-lite/gsl-lite   SYSTEM OFF)
 #CPMAddPackage(NAME xsimd         GIT_TAG 13.1.0 GITHUB_REPOSITORY xtensor-stack/xsimd SYSTEM OFF)
 if(PATTON_BUILD_TESTING)
     set(CMAKE_CXX_STANDARD 17)  # workaround, cf. https://github.com/catchorg/Catch2/issues/2046
@@ -49,5 +49,5 @@ install_basic_package_files(patton
     COMPATIBILITY SameMajorVersion
     DEPENDENCIES
         "Threads"
-        "gsl-lite 0.43"
+        "gsl-lite 1.0"
 )

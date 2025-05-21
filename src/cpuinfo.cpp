@@ -245,6 +245,8 @@ init_cpu_info() noexcept
 
 namespace patton {
 
+namespace gsl = ::gsl_lite;
+
 
 #if defined(_WIN32)
 std::size_t

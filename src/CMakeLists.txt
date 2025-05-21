@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.30)
 
 # dependencies
 find_package(Threads REQUIRED)
-find_package(gsl-lite 0.43 REQUIRED)
+find_package(gsl-lite 1.0 REQUIRED)
 
 # library target
 add_library(patton STATIC
@@ -79,7 +79,7 @@ endif()
 target_link_libraries(patton
     PUBLIC
         Threads::Threads
-        gsl::gsl-lite-v1
+        gsl-lite::gsl-lite
 )
 
 # installation: public header files, target
