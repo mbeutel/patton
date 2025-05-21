@@ -15,7 +15,7 @@
 #include <cstddef>       // for size_t, ptrdiff_t
 #include <cstring>       // for wcslen(), swprintf()
 #include <utility>       // for move()
-#include <algorithm>     // for min(), max()
+#include <algorithm>     // for min()
 #include <exception>     // for terminate()
 #include <stdexcept>     // for range_error
 #include <type_traits>   // for remove_pointer<>
@@ -1155,7 +1155,7 @@ thread_squad::create(thread_squad::params p)
             !p.hardware_thread_mappings.empty() ? gsl::narrow_failfast<int>(p.hardware_thread_mappings.size())
           : hardwareConcurrency;
     }
-    p.max_num_hardware_threads = std::max(p.max_num_hardware_threads, hardwareConcurrency);
+    p.max_num_hardware_threads = std::min(p.max_num_hardware_threads, hardwareConcurrency);
 
         // Check system support for thread pinning.
 #ifndef THREAD_PINNING_SUPPORTED
