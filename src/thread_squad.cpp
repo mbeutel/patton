@@ -614,7 +614,7 @@ public:
         thread_squad_task&
         task_wait() noexcept
         {
-            auto& commData = threadSquad_.threadCommData_[threadIdx_].fork_join;
+            auto& commData = threadSquad_.threadCommData_[threadIdx_].fork;
             auto currentSense = outgoing_.load(std::memory_order_relaxed);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
             detail::wait_and_load(commData.mutex, commData.cv, incoming_, currentSense, threadSquad_.waitMode_);
@@ -638,7 +638,7 @@ public:
         task_signal_completion() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling outgoing sense %d\n", threadIdx_, (1 ^ outgoing_.load(std::memory_order_relaxed)));
-            auto& commData = threadSquad_.threadCommData_[threadIdx_].fork_join;
+            auto& commData = threadSquad_.threadCommData_[threadIdx_].join;
             detail::toggle_and_notify(commData.mutex, commData.cv, outgoing_);
         }
 
@@ -665,8 +665,10 @@ private:
     };
     struct thread_comm_data
     {
-        thread_sync_data fork_join;
-        thread_sync_data collect_broadcast;
+        thread_sync_data fork;
+        thread_sync_data join;
+        thread_sync_data collect;
+        thread_sync_data broadcast;
     };
 
     static constexpr int treeBreadth = 8;
@@ -752,7 +754,7 @@ private:
     broadcast_to_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: notifying %d with downward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed)));
-        auto& commData = threadCommData_[targetThreadIdx].collect_broadcast;
+        auto& commData = threadCommData_[targetThreadIdx].broadcast;
         //auto& notifyData = threadNotifyData_[targetThreadIdx];
         synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
         detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[targetThreadIdx].downward_);
@@ -761,7 +763,7 @@ private:
     void
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
-        auto& commData = threadCommData_[targetThreadIdx].collect_broadcast;
+        auto& commData = threadCommData_[targetThreadIdx].collect;
         int prevSense = threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaiting %d for upward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ prevSense));
         detail::wait_and_load(commData.mutex, commData.cv, threadData_[targetThreadIdx].upward_, prevSense, waitMode_);
@@ -809,7 +811,7 @@ public:
     //    for (int i = 0; i < numThreadsToWake; ++i)
     //    {
     //        THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
-    //        auto& commData = threadCommData_[targetThreadIdx].fork_join;
+    //        auto& commData = threadCommData_[targetThreadIdx].fork;
     //        detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[i].incoming_);
     //    }
     //    for (int i = 0; i < numThreads; ++i)
@@ -833,14 +835,14 @@ public:
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: notifying %d with incoming sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed)));
-        auto& commData = threadCommData_[targetThreadIdx].fork_join;
+        auto& commData = threadCommData_[targetThreadIdx].fork;
         detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[targetThreadIdx].incoming_);
     }
 
     void
     wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait) noexcept
     {
-        auto& commData = threadCommData_[targetThreadIdx].fork_join;
+        auto& commData = threadCommData_[targetThreadIdx].join;
         int currentSense = threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed);
         int prevSense = 1 ^ currentSense;
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaiting %d for outgoing sense %d\n", callingThreadIdx, targetThreadIdx, currentSense);
@@ -934,9 +936,10 @@ public:
         if (callingThreadIdx > 0)
         {
             threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
-            auto& commData = threadCommData_[callingThreadIdx].collect_broadcast;
-            int oldValue = detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[callingThreadIdx].upward_);
-            detail::wait_and_load(commData.mutex, commData.cv, threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
+            auto& collectCommData = threadCommData_[callingThreadIdx].collect;
+            int oldValue = detail::toggle_and_notify(collectCommData.mutex, collectCommData.cv, threadData_[callingThreadIdx].upward_);
+            auto& broadcastCommData = threadCommData_[callingThreadIdx].broadcast;
+            detail::wait_and_load(broadcastCommData.mutex, broadcastCommData.cv, threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
             threadData_[callingThreadIdx].syncData_ = nullptr;
         }
     }
