@@ -8,18 +8,20 @@
 #endif // DEBUG_WAIT_CHAIN
 
 #include <new>
+#include <mutex>
 #include <string>
-#include <memory>        // for unique_ptr<>
+#include <memory>              // for unique_ptr<>
 #include <atomic>
 #include <thread>
-#include <cstddef>       // for size_t, ptrdiff_t
-#include <cstring>       // for wcslen(), swprintf()
-#include <utility>       // for move()
-#include <algorithm>     // for min()
-#include <exception>     // for terminate()
-#include <stdexcept>     // for range_error
-#include <type_traits>   // for remove_pointer<>
+#include <cstddef>             // for size_t, ptrdiff_t
+#include <cstring>             // for wcslen(), swprintf()
+#include <utility>             // for move()
+#include <algorithm>           // for min()
+#include <exception>           // for terminate()
+#include <stdexcept>           // for range_error
+#include <type_traits>         // for remove_pointer<>
 #include <system_error>
+#include <condition_variable>
 
 #if defined(_WIN32)
 # ifndef NOMINMAX
@@ -354,12 +356,18 @@ enum class wait_mode
 template <typename T>
 T
 wait_and_load(
+    std::mutex& mutex, std::condition_variable& cv,
     std::atomic<T>& a, T oldValue,
     wait_mode waitMode = wait_mode::spin_wait) noexcept
 {
     if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
     {
-        a.wait(oldValue, std::memory_order_relaxed);
+        auto lock = std::unique_lock(mutex);  // implicit acquire
+        while (a.load(std::memory_order_relaxed) == oldValue)
+        {
+            cv.wait(lock);  // implicit release/acquire
+        }
+        // implicit release in destructor of `lock`
     }
     return a.load(std::memory_order_acquire);
 }
@@ -367,14 +375,19 @@ wait_and_load(
 template <typename T>
 T
 toggle_and_notify(
+    std::mutex& mutex, std::condition_variable& cv,
     std::atomic<T>& a) noexcept
 {
     std::atomic_thread_fence(std::memory_order_release);
 
     T oldValue = a.load(std::memory_order_relaxed);
     T newValue = 1 ^ oldValue;
-    a.store(newValue, std::memory_order_release);
-    a.notify_one();
+    {
+        auto lock = std::lock_guard(mutex);  // implicit acquire
+        a.store(newValue, std::memory_order_release);
+        // implicit release in destructor of `lock`
+    }
+    cv.notify_one();
     return oldValue;
 }
 
@@ -601,9 +614,10 @@ public:
         thread_squad_task&
         task_wait() noexcept
         {
+            auto& commData = threadSquad_.threadCommData_[threadIdx_].fork_join;
             auto currentSense = outgoing_.load(std::memory_order_relaxed);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
-            detail::wait_and_load(incoming_, currentSense, threadSquad_.waitMode_);
+            detail::wait_and_load(commData.mutex, commData.cv, incoming_, currentSense, threadSquad_.waitMode_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -624,7 +638,8 @@ public:
         task_signal_completion() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling outgoing sense %d\n", threadIdx_, (1 ^ outgoing_.load(std::memory_order_relaxed)));
-            detail::toggle_and_notify(outgoing_);
+            auto& commData = threadSquad_.threadCommData_[threadIdx_].fork_join;
+            detail::toggle_and_notify(commData.mutex, commData.cv, outgoing_);
         }
 
         int
@@ -642,11 +657,22 @@ public:
         }
     };
 
-
 private:
+    struct thread_sync_data
+    {
+        std::mutex mutex;
+        std::condition_variable cv;
+    };
+    struct thread_comm_data
+    {
+        thread_sync_data fork_join;
+        thread_sync_data collect_broadcast;
+    };
+
     static constexpr int treeBreadth = 8;
 
         // synchronization data
+    aligned_buffer<thread_comm_data, cache_line_alignment> threadCommData_;
     aligned_buffer<thread_data, cache_line_alignment> threadData_;
     wait_mode waitMode_;
 
@@ -726,16 +752,19 @@ private:
     broadcast_to_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: notifying %d with downward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed)));
+        auto& commData = threadCommData_[targetThreadIdx].collect_broadcast;
+        //auto& notifyData = threadNotifyData_[targetThreadIdx];
         synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
-        detail::toggle_and_notify(threadData_[targetThreadIdx].downward_);
+        detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[targetThreadIdx].downward_);
     }
 
     void
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
+        auto& commData = threadCommData_[targetThreadIdx].collect_broadcast;
         int prevSense = threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaiting %d for upward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ prevSense));
-        detail::wait_and_load(threadData_[targetThreadIdx].upward_, prevSense, waitMode_);
+        detail::wait_and_load(commData.mutex, commData.cv, threadData_[targetThreadIdx].upward_, prevSense, waitMode_);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaited %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.collect(threadData_[targetThreadIdx].syncData_);
     }
@@ -743,6 +772,7 @@ private:
 public:
     thread_squad_impl(thread_squad::params const& params)
         : thread_squad_impl_base{ params.num_threads },
+          threadCommData_(gsl::narrow_failfast<std::size_t>(params.num_threads)),
           threadData_(gsl::narrow_failfast<std::size_t>(params.num_threads), std::in_place, *this),
           waitMode_(params.spin_wait ? wait_mode::spin_wait : wait_mode::wait)
     {
@@ -779,7 +809,8 @@ public:
     //    for (int i = 0; i < numThreadsToWake; ++i)
     //    {
     //        THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
-    //        detail::toggle_and_notify(threadData_[i].incoming_);
+    //        auto& commData = threadCommData_[targetThreadIdx].fork_join;
+    //        detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[i].incoming_);
     //    }
     //    for (int i = 0; i < numThreads; ++i)
     //    {
@@ -802,16 +833,18 @@ public:
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: notifying %d with incoming sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed)));
-        detail::toggle_and_notify(threadData_[targetThreadIdx].incoming_);
+        auto& commData = threadCommData_[targetThreadIdx].fork_join;
+        detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[targetThreadIdx].incoming_);
     }
 
     void
     wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait) noexcept
     {
+        auto& commData = threadCommData_[targetThreadIdx].fork_join;
         int currentSense = threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed);
         int prevSense = 1 ^ currentSense;
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaiting %d for outgoing sense %d\n", callingThreadIdx, targetThreadIdx, currentSense);
-        detail::wait_and_load(threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
+        detail::wait_and_load(commData.mutex, commData.cv, threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited %d\n", callingThreadIdx, targetThreadIdx);
 
             // Merge results if the target thread participated in the task and if we are not on the main thread.
@@ -901,8 +934,9 @@ public:
         if (callingThreadIdx > 0)
         {
             threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
-            int oldValue = detail::toggle_and_notify(threadData_[callingThreadIdx].upward_);
-            detail::wait_and_load(threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
+            auto& commData = threadCommData_[callingThreadIdx].collect_broadcast;
+            int oldValue = detail::toggle_and_notify(commData.mutex, commData.cv, threadData_[callingThreadIdx].upward_);
+            detail::wait_and_load(commData.mutex, commData.cv, threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
             threadData_[callingThreadIdx].syncData_ = nullptr;
         }
     }
