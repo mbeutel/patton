@@ -61,6 +61,12 @@
             "inherits": [ "CI settings", "GCC presets", "ASan", "UBSan", "library debug checks" ]
         },
         {
+            "name": "ci-gcc-sanitize-thread",
+            "displayName": "GCC & TSan (for CI)",
+            "description": "Build with GCC and ThreadSanitizer (for Continuous Integration).",
+            "inherits": [ "CI settings", "GCC presets", "TSan" ]
+        },
+        {
             "name": "ci-clang",
             "displayName": "Clang (for CI)",
             "description": "Build with Clang (for Continuous Integration).",
@@ -73,6 +79,12 @@
             "inherits": [ "CI settings", "Clang presets", "libc++ for Clang", "ASan", "UBSan", "library debug checks" ]
         },
         {
+            "name": "ci-clang-sanitize-thread",
+            "displayName": "Clang & TSan (for CI)",
+            "description": "Build with Clang and ThreadSanitizer (for Continuous Integration).",
+            "inherits": [ "CI settings", "Clang presets", "libc++ for Clang", "TSan" ]
+        },
+        {
             "name": "ci-clang-libstdc++",
             "displayName": "Clang & libstdc++ (for CI)",
             "description": "Build with Clang (for Continuous Integration).",
@@ -83,6 +95,12 @@
             "displayName": "Clang & ASan & UBSan & libstdc++ & library debug checks (for CI)",
             "description": "Build with Clang and AddressSanitizer and UndefinedBehaviorSanitizer and libstdc++ and library debug checks (for Continuous Integration).",
             "inherits": [ "CI settings", "Clang presets", "libstdc++ for Clang", "ASan", "UBSan", "library debug checks" ]
+        },
+        {
+            "name": "ci-clang-libstdc++-sanitize-thread",
+            "displayName": "Clang & TSan & libstdc++ (for CI)",
+            "description": "Build with Clang and ThreadSanitizer and libstdc++ (for Continuous Integration).",
+            "inherits": [ "CI settings", "Clang presets", "libstdc++ for Clang", "TSan" ]
         }
     ]
 }
