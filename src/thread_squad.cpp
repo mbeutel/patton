@@ -369,8 +369,6 @@ T
 toggle_and_notify(
     std::atomic<T>& a) noexcept
 {
-    std::atomic_thread_fence(std::memory_order_release);
-
     T oldValue = a.load(std::memory_order_relaxed);
     T newValue = 1 ^ oldValue;
     a.store(newValue, std::memory_order_release);
