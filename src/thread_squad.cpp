@@ -359,9 +359,13 @@ wait_and_load(
 {
     if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
     {
-        a.wait(oldValue, std::memory_order_relaxed);
+        a.wait(oldValue, std::memory_order_acquire);
+        return a.load(std::memory_order_relaxed);
     }
-    return a.load(std::memory_order_acquire);
+    else
+    {
+        return a.load(std::memory_order_acquire);
+    }
 }
 
 template <typename T>
