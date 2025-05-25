@@ -354,7 +354,7 @@ enum class wait_mode
 template <typename T>
 void
 wait_and_reset(
-    std::atomic<T>& a, T oldValue = { },
+    std::atomic<T>& a, T oldValue,
     wait_mode waitMode = wait_mode::spin_wait) noexcept
 {
     if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
@@ -373,9 +373,41 @@ wait_and_reset(
     std::atomic<T>& a,
     wait_mode waitMode = wait_mode::spin_wait) noexcept
 {
-    return detail::wait_and_reset(a, { }, waitMode);
+    detail::wait_and_reset(a, { }, waitMode);
 }
 
+template <typename T>
+void
+wait(
+    std::atomic<T>& a, T oldValue,
+    wait_mode waitMode = wait_mode::spin_wait) noexcept
+{
+    if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
+    {
+        a.wait(oldValue, std::memory_order_acquire);
+    }
+    else
+    {
+        [[maybe_unused]] auto _ = a.load(std::memory_order_acquire);
+    }
+}
+template <typename T>
+void
+wait(
+    std::atomic<T>& a,
+    wait_mode waitMode = wait_mode::spin_wait) noexcept
+{
+    detail::wait(a, { }, waitMode);
+}
+
+template <typename T>
+void
+reset(
+    std::atomic<T>& a,
+    T resetValue = { })
+{
+    a.store(resetValue, std::memory_order_relaxed);
+}
 template <typename T>
 void
 set_and_notify(
@@ -630,7 +662,8 @@ public:
         task_wait() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for new task\n", threadIdx_);
-            detail::wait_and_reset(signalTaskAvailable_, threadSquad_.waitMode_);
+            //detail::wait_and_reset(signalTaskAvailable_, threadSquad_.waitMode_);
+            detail::wait(signalTaskAvailable_, threadSquad_.waitMode_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -651,6 +684,7 @@ public:
         task_signal_completion() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling task completion\n", threadIdx_);
+            detail::reset(signalTaskAvailable_);
             detail::set_and_notify(signalTaskProcessed_);
         }
 
@@ -754,6 +788,7 @@ private:
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: broadcasting to %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
+        detail::reset(threadData_[targetThreadIdx].signalCollecting_);
         detail::set_and_notify(threadData_[targetThreadIdx].signalBroadcasting_);
     }
 
@@ -761,7 +796,8 @@ private:
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: waiting to collect from %d\n", callingThreadIdx, targetThreadIdx);
-        detail::wait_and_reset(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
+        //detail::wait_and_reset(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
+        detail::wait(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: collected from %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.collect(threadData_[targetThreadIdx].syncData_);
     }
@@ -805,7 +841,8 @@ public:
     //    for (int i = 0; i < numThreadsToWake; ++i)
     //    {
     //        THREAD_SQUAD_DBG("patton thread squad, thread -1: submit task to %d\n", i);
-    //        detail::set_and_notify(threadData_[i].busy_);
+    //        detail::reset(threadData_[i].signalTaskProcessed_);
+    //        detail::set_and_notify(threadData_[i].signalTaskAvailable_);
     //    }
     //    for (int i = 0; i < numThreads; ++i)
     //    {
@@ -828,6 +865,7 @@ public:
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: submit task to %d\n", callingThreadIdx, targetThreadIdx);
+        detail::reset(threadData_[targetThreadIdx].signalTaskProcessed_);
         detail::set_and_notify(threadData_[targetThreadIdx].signalTaskAvailable_);
     }
 
@@ -835,7 +873,8 @@ public:
     wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for %d to process task\n", callingThreadIdx, targetThreadIdx);
-        detail::wait_and_reset(threadData_[targetThreadIdx].signalTaskProcessed_, waitMode);
+        //detail::wait_and_reset(threadData_[targetThreadIdx].signalTaskProcessed_, waitMode);
+        detail::wait(threadData_[targetThreadIdx].signalTaskProcessed_, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited task processed by %d\n", callingThreadIdx, targetThreadIdx);
 
             // Merge results if the target thread participated in the task and if we are not on the main thread.
@@ -925,8 +964,10 @@ public:
         if (callingThreadIdx > 0)
         {
             threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
+            detail::reset(threadData_[callingThreadIdx].signalBroadcasting_);
             detail::set_and_notify(threadData_[callingThreadIdx].signalCollecting_);
-            detail::wait_and_reset(threadData_[callingThreadIdx].signalBroadcasting_, waitMode_);
+            //detail::wait_and_reset(threadData_[callingThreadIdx].signalBroadcasting_, waitMode_);
+            detail::wait(threadData_[callingThreadIdx].signalBroadcasting_, waitMode_);
             threadData_[callingThreadIdx].syncData_ = nullptr;
         }
     }
