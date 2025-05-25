@@ -352,20 +352,28 @@ enum class wait_mode
 };
 
 template <typename T>
-T
-wait_and_load(
-    std::atomic<T>& a, T oldValue,
+void
+wait_and_reset(
+    std::atomic<T>& a, T oldValue = { },
     wait_mode waitMode = wait_mode::spin_wait) noexcept
 {
     if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
     {
         a.wait(oldValue, std::memory_order_acquire);
-        return a.load(std::memory_order_relaxed);
     }
     else
     {
-        return a.load(std::memory_order_acquire);
+        [[maybe_unused]] auto _ = a.load(std::memory_order_acquire);
     }
+    a.store(oldValue, std::memory_order_relaxed);
+}
+template <typename T>
+void
+wait_and_reset(
+    std::atomic<T>& a,
+    wait_mode waitMode = wait_mode::spin_wait) noexcept
+{
+    return detail::wait_and_reset(a, { }, waitMode);
 }
 
 template <typename T>
@@ -377,6 +385,25 @@ set_and_notify(
     gsl_Assert(oldValue != newValue);
     a.store(newValue, std::memory_order_release);
     a.notify_one();
+}
+
+//bool
+//toggle_value(bool value)
+//{
+//    return !value;
+//}
+int
+toggle_value(int value)
+{
+    return 1 ^ value;
+}
+
+template <typename T>
+void
+set_and_notify(
+    std::atomic<T>& a) noexcept
+{
+    detail::set_and_notify(a, detail::toggle_value(T{ }));
 }
 
 
@@ -522,9 +549,11 @@ public:
         os_thread osThread_;
 
             // synchronization data
-        std::atomic<int> busy_;           // fork–join; set to 1 by controlling thread, set to 0 by worker thread
-        std::atomic<int> synchronizing_;  // collect–distribute; set to 1 by worker thread, set to 0 by controlling thread
-        void* syncData_;                  // synchronization data made accessible to the superordinate thread between collection and distribution
+        std::atomic<int> signalTaskAvailable_;  // set to 1 by controlling thread, set to 0 by worker thread
+        std::atomic<int> signalTaskProcessed_;  // set to 1 by worker thread, set to 0 by controlling thread
+        std::atomic<int> signalCollecting_;     // set to 1 by worker thread, set to 0 by controlling thread
+        std::atomic<int> signalBroadcasting_;   // set to 1 by controlling thread, set to 0 by worker thread
+        void* syncData_;  // synchronization data made accessible to the superordinate thread between collection and distribution
 
         int
         num_threads_for_task() const noexcept
@@ -537,8 +566,10 @@ public:
     public:
         thread_data(thread_squad_impl& _impl) noexcept
             : threadSquad_(_impl),
-              busy_(0),
-              synchronizing_(0),
+              signalTaskAvailable_(0),
+              signalTaskProcessed_(0),
+              signalCollecting_(0),
+              signalBroadcasting_(0),
               syncData_(nullptr)
         {
         }
@@ -599,8 +630,7 @@ public:
         task_wait() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for new task\n", threadIdx_);
-            int notBusyVal = 0;
-            detail::wait_and_load(busy_, notBusyVal, threadSquad_.waitMode_);
+            detail::wait_and_reset(signalTaskAvailable_, threadSquad_.waitMode_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -621,8 +651,7 @@ public:
         task_signal_completion() noexcept
         {
             THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling task completion\n", threadIdx_);
-            int notBusyVal = 0;
-            detail::set_and_notify(busy_, notBusyVal);
+            detail::set_and_notify(signalTaskProcessed_);
         }
 
         int
@@ -725,16 +754,14 @@ private:
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: broadcasting to %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
-        int notSynchronizingVal = 0;
-        detail::set_and_notify(threadData_[targetThreadIdx].synchronizing_, notSynchronizingVal);
+        detail::set_and_notify(threadData_[targetThreadIdx].signalBroadcasting_);
     }
 
     void
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: waiting to collect from %d\n", callingThreadIdx, targetThreadIdx);
-        int notSynchronizingVal = 0;
-        detail::wait_and_load(threadData_[targetThreadIdx].synchronizing_, notSynchronizingVal, waitMode_);
+        detail::wait_and_reset(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: collected from %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.collect(threadData_[targetThreadIdx].syncData_);
     }
@@ -778,8 +805,7 @@ public:
     //    for (int i = 0; i < numThreadsToWake; ++i)
     //    {
     //        THREAD_SQUAD_DBG("patton thread squad, thread -1: submit task to %d\n", i);
-    //        int busyVal = 1;
-    //        detail::set_and_notify(threadData_[i].busy_, busyVal);
+    //        detail::set_and_notify(threadData_[i].busy_);
     //    }
     //    for (int i = 0; i < numThreads; ++i)
     //    {
@@ -802,16 +828,14 @@ public:
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: submit task to %d\n", callingThreadIdx, targetThreadIdx);
-        int busyVal = 1;
-        detail::set_and_notify(threadData_[targetThreadIdx].busy_, busyVal);
+        detail::set_and_notify(threadData_[targetThreadIdx].signalTaskAvailable_);
     }
 
     void
     wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for %d to process task\n", callingThreadIdx, targetThreadIdx);
-        int busyVal = 1;
-        detail::wait_and_load(threadData_[targetThreadIdx].busy_, busyVal, waitMode);
+        detail::wait_and_reset(threadData_[targetThreadIdx].signalTaskProcessed_, waitMode);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited task processed by %d\n", callingThreadIdx, targetThreadIdx);
 
             // Merge results if the target thread participated in the task and if we are not on the main thread.
@@ -901,9 +925,8 @@ public:
         if (callingThreadIdx > 0)
         {
             threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
-            int synchronizingVal = 1;
-            detail::set_and_notify(threadData_[callingThreadIdx].synchronizing_, synchronizingVal);
-            detail::wait_and_load(threadData_[callingThreadIdx].synchronizing_, synchronizingVal, waitMode_);
+            detail::set_and_notify(threadData_[callingThreadIdx].signalCollecting_);
+            detail::wait_and_reset(threadData_[callingThreadIdx].signalBroadcasting_, waitMode_);
             threadData_[callingThreadIdx].syncData_ = nullptr;
         }
     }
