@@ -369,15 +369,14 @@ wait_and_load(
 }
 
 template <typename T>
-T
-toggle_and_notify(
-    std::atomic<T>& a) noexcept
+void
+set_and_notify(
+    std::atomic<T>& a, T newValue) noexcept
 {
     T oldValue = a.load(std::memory_order_relaxed);
-    T newValue = 1 ^ oldValue;
+    gsl_Assert(oldValue != newValue);
     a.store(newValue, std::memory_order_release);
     a.notify_one();
-    return oldValue;
 }
 
 
@@ -523,11 +522,9 @@ public:
         os_thread osThread_;
 
             // synchronization data
-        std::atomic<int> incoming_;  // new task notification
-        std::atomic<int> outgoing_;  // task completion notification
-        std::atomic<int> upward_;    // synchronization point collection
-        std::atomic<int> downward_;  // synchronization point distribution
-        void* syncData_;             // synchronization data made accessible to the superordinate thread between collection and distribution
+        std::atomic<int> busy_;           // fork–join; set to 1 by controlling thread, set to 0 by worker thread
+        std::atomic<int> synchronizing_;  // collect–distribute; set to 1 by worker thread, set to 0 by controlling thread
+        void* syncData_;                  // synchronization data made accessible to the superordinate thread between collection and distribution
 
         int
         num_threads_for_task() const noexcept
@@ -540,10 +537,8 @@ public:
     public:
         thread_data(thread_squad_impl& _impl) noexcept
             : threadSquad_(_impl),
-              incoming_(0),
-              outgoing_(0),
-              upward_(0),
-              downward_(0),
+              busy_(0),
+              synchronizing_(0),
               syncData_(nullptr)
         {
         }
@@ -603,9 +598,9 @@ public:
         thread_squad_task&
         task_wait() noexcept
         {
-            auto currentSense = outgoing_.load(std::memory_order_relaxed);
-            THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for incoming sense %d\n", threadIdx_, (1 ^ currentSense));
-            detail::wait_and_load(incoming_, currentSense, threadSquad_.waitMode_);
+            THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for new task\n", threadIdx_);
+            int notBusyVal = 0;
+            detail::wait_and_load(busy_, notBusyVal, threadSquad_.waitMode_);
             THREAD_SQUAD_DBG("patton thread squad, thread %d: processing task\n", threadIdx_);
             gsl_Assert(threadSquad_.task_ != nullptr);
             return *threadSquad_.task_;
@@ -625,8 +620,9 @@ public:
         void
         task_signal_completion() noexcept
         {
-            THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling outgoing sense %d\n", threadIdx_, (1 ^ outgoing_.load(std::memory_order_relaxed)));
-            detail::toggle_and_notify(outgoing_);
+            THREAD_SQUAD_DBG("patton thread squad, thread %d: signaling task completion\n", threadIdx_);
+            int notBusyVal = 0;
+            detail::set_and_notify(busy_, notBusyVal);
         }
 
         int
@@ -727,18 +723,19 @@ private:
     void
     broadcast_to_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: notifying %d with downward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed)));
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: broadcasting to %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.broadcast(threadData_[targetThreadIdx].syncData_);
-        detail::toggle_and_notify(threadData_[targetThreadIdx].downward_);
+        int notSynchronizingVal = 0;
+        detail::set_and_notify(threadData_[targetThreadIdx].synchronizing_, notSynchronizingVal);
     }
 
     void
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
-        int prevSense = threadData_[targetThreadIdx].downward_.load(std::memory_order_relaxed);
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaiting %d for upward sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ prevSense));
-        detail::wait_and_load(threadData_[targetThreadIdx].upward_, prevSense, waitMode_);
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: awaited %d\n", callingThreadIdx, targetThreadIdx);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: waiting to collect from %d\n", callingThreadIdx, targetThreadIdx);
+        int notSynchronizingVal = 0;
+        detail::wait_and_load(threadData_[targetThreadIdx].synchronizing_, notSynchronizingVal, waitMode_);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: collected from %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.collect(threadData_[targetThreadIdx].syncData_);
     }
 
@@ -780,8 +777,9 @@ public:
     //    int numThreadsToWake = num_threads_for_task();
     //    for (int i = 0; i < numThreadsToWake; ++i)
     //    {
-    //        THREAD_SQUAD_DBG("patton thread squad, thread -1: notifying %d with incoming sense %d\n", i, (1 ^ threadData_[i].incoming_.load(std::memory_order_relaxed)));
-    //        detail::toggle_and_notify(threadData_[i].incoming_);
+    //        THREAD_SQUAD_DBG("patton thread squad, thread -1: submit task to %d\n", i);
+    //        int busyVal = 1;
+    //        detail::set_and_notify(threadData_[i].busy_, busyVal);
     //    }
     //    for (int i = 0; i < numThreads; ++i)
     //    {
@@ -803,18 +801,18 @@ public:
     void
     notify_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: notifying %d with incoming sense %d\n", callingThreadIdx, targetThreadIdx, (1 ^ threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed)));
-        detail::toggle_and_notify(threadData_[targetThreadIdx].incoming_);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: submit task to %d\n", callingThreadIdx, targetThreadIdx);
+        int busyVal = 1;
+        detail::set_and_notify(threadData_[targetThreadIdx].busy_, busyVal);
     }
 
     void
     wait_for_thread([[maybe_unused]] int callingThreadIdx, int targetThreadIdx, wait_mode waitMode = wait_mode::spin_wait) noexcept
     {
-        int currentSense = threadData_[targetThreadIdx].incoming_.load(std::memory_order_relaxed);
-        int prevSense = 1 ^ currentSense;
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: awaiting %d for outgoing sense %d\n", callingThreadIdx, targetThreadIdx, currentSense);
-        detail::wait_and_load(threadData_[targetThreadIdx].outgoing_, prevSense, waitMode);
-        THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited %d\n", callingThreadIdx, targetThreadIdx);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: waiting for %d to process task\n", callingThreadIdx, targetThreadIdx);
+        int busyVal = 1;
+        detail::wait_and_load(threadData_[targetThreadIdx].busy_, busyVal, waitMode);
+        THREAD_SQUAD_DBG("patton thread squad, thread %d: awaited task processed by %d\n", callingThreadIdx, targetThreadIdx);
 
             // Merge results if the target thread participated in the task and if we are not on the main thread.
         if (callingThreadIdx >= 0 && targetThreadIdx < task_->params.concurrency)
@@ -903,8 +901,9 @@ public:
         if (callingThreadIdx > 0)
         {
             threadData_[callingThreadIdx].syncData_ = synchronizer.sync_data();
-            int oldValue = detail::toggle_and_notify(threadData_[callingThreadIdx].upward_);
-            detail::wait_and_load(threadData_[callingThreadIdx].downward_, oldValue, waitMode_);
+            int synchronizingVal = 1;
+            detail::set_and_notify(threadData_[callingThreadIdx].synchronizing_, synchronizingVal);
+            detail::wait_and_load(threadData_[callingThreadIdx].synchronizing_, synchronizingVal, waitMode_);
             threadData_[callingThreadIdx].syncData_ = nullptr;
         }
     }
