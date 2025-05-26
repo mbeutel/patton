@@ -6,6 +6,7 @@
 struct benchmark_params
 {
     int num_threads = 0;
+    bool no_smt = false;
     bool spin_wait = false;
 };
 

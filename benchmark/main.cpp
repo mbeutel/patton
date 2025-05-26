@@ -16,6 +16,9 @@ int main(int argc, char* argv[])
         | Catch::Clara::Opt(global_benchmark_params.num_threads, "n")
           ["--num-threads"]
           ("number of threads to use in thread_squad benchmarks")
+        | Catch::Clara::Opt(global_benchmark_params.no_smt)
+          ["--no-smt"]
+          ("if set, the number of threads defaults to the number of cores, not the number of hardware threads")
         | Catch::Clara::Opt(global_benchmark_params.spin_wait)
           ["--spin-wait"]
           ("whether to use spin-waiting");
