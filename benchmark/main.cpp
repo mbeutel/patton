@@ -14,8 +14,11 @@ int main(int argc, char* argv[])
     auto cli
         = session.cli()
         | Catch::Clara::Opt(global_benchmark_params.num_threads, "n")
-        ["--num-threads"]
-        ("number of threads to use in thread_squad benchmarks");
+          ["--num-threads"]
+          ("number of threads to use in thread_squad benchmarks")
+        | Catch::Clara::Opt(global_benchmark_params.spin_wait)
+          ["--spin-wait"]
+          ("whether to use spin-waiting");
 
     session.cli(cli);
 

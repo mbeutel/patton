@@ -6,6 +6,7 @@
 struct benchmark_params
 {
     int num_threads = 0;
+    bool spin_wait = false;
 };
 
 extern benchmark_params global_benchmark_params;

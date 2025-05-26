@@ -15,7 +15,8 @@
 TEST_CASE("thread_squad: create-run-destroy")
 {
     auto params = patton::thread_squad::params{
-        /*.num_threads = */ global_benchmark_params.num_threads
+        .num_threads = global_benchmark_params.num_threads,
+        .spin_wait = global_benchmark_params.spin_wait
     };
 #ifdef THREAD_PINNING_SUPPORTED
     params.pin_to_hardware_threads = true;
@@ -35,7 +36,8 @@ TEST_CASE("thread_squad: create-run-destroy")
 TEST_CASE("thread_squad: run")
 {
     auto params = patton::thread_squad::params{
-        /*.num_threads = */ global_benchmark_params.num_threads
+        .num_threads = global_benchmark_params.num_threads,
+        .spin_wait = global_benchmark_params.spin_wait
     };
 #ifdef THREAD_PINNING_SUPPORTED
     params.pin_to_hardware_threads = true;
