@@ -310,6 +310,7 @@ pause() noexcept
 constexpr int spinCount = 6;  // 4 or 6
 constexpr int spinRep = 1;  // 2 or 1
 constexpr int pauseCountExp = 9;
+constexpr int smtPauseCountExp = 9;
 constexpr int yieldCountExp = 0;  // 6
 
 template <typename T>
@@ -345,36 +346,31 @@ wait_equal_exponential_backoff(std::atomic<T> const& a, T oldValue) noexcept
     return false;
 }
 
+template <typename T>
+bool
+wait_equal_smt(std::atomic<T> const& a, T oldValue) noexcept
+{
+    if (a.load(std::memory_order_relaxed) != oldValue) return true;
+    for (int i = 0; i < (1 << smtPauseCountExp); ++i)
+    {
+        if (a.load(std::memory_order_relaxed) != oldValue) return true;
+        detail::pause();
+    }
+    int lyieldCount = 1 << yieldCountExp;
+    for (int i = 0; i < lyieldCount; ++i)
+    {
+        if (a.load(std::memory_order_relaxed) != oldValue) return true;
+        std::this_thread::yield();
+    }
+    return false;
+}
+
 enum class wait_mode
 {
     wait,
-    spin_wait
+    spin_wait,
+    smt_spin_wait
 };
-
-template <typename T>
-void
-wait_and_reset(
-    std::atomic<T>& a, T oldValue,
-    wait_mode waitMode = wait_mode::spin_wait) noexcept
-{
-    if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
-    {
-        a.wait(oldValue, std::memory_order_acquire);
-    }
-    else
-    {
-        [[maybe_unused]] auto _ = a.load(std::memory_order_acquire);
-    }
-    a.store(oldValue, std::memory_order_relaxed);
-}
-template <typename T>
-void
-wait_and_reset(
-    std::atomic<T>& a,
-    wait_mode waitMode = wait_mode::spin_wait) noexcept
-{
-    detail::wait_and_reset(a, { }, waitMode);
-}
 
 template <typename T>
 void
@@ -382,13 +378,14 @@ wait(
     std::atomic<T>& a, T oldValue,
     wait_mode waitMode = wait_mode::spin_wait) noexcept
 {
-    if (waitMode != wait_mode::spin_wait || !detail::wait_equal_exponential_backoff(a, oldValue))
+    if ((waitMode == wait_mode::spin_wait && detail::wait_equal_exponential_backoff(a, oldValue)) ||
+        (waitMode == wait_mode::smt_spin_wait && detail::wait_equal_smt(a, oldValue)))
     {
-        a.wait(oldValue, std::memory_order_acquire);
+        [[maybe_unused]] auto _ = a.load(std::memory_order_acquire);
     }
     else
     {
-        [[maybe_unused]] auto _ = a.load(std::memory_order_acquire);
+        a.wait(oldValue, std::memory_order_acquire);
     }
 }
 template <typename T>
@@ -710,6 +707,7 @@ private:
         // synchronization data
     aligned_buffer<thread_data, page_alignment> threadData_;
     wait_mode waitMode_;
+    wait_mode smtWaitMode_;
 
         // task-specific data
     detail::thread_squad_task* task_;
@@ -796,7 +794,6 @@ private:
     collect_from_thread(task_context_synchronizer& synchronizer, [[maybe_unused]] int callingThreadIdx, int targetThreadIdx) noexcept
     {
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: waiting to collect from %d\n", callingThreadIdx, targetThreadIdx);
-        //detail::wait_and_reset(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
         detail::wait(threadData_[targetThreadIdx].signalCollecting_, waitMode_);
         THREAD_SQUAD_DBG("patton thread squad, thread %d: synchronization: collected from %d\n", callingThreadIdx, targetThreadIdx);
         synchronizer.collect(threadData_[targetThreadIdx].syncData_);
@@ -806,7 +803,8 @@ public:
     thread_squad_impl(thread_squad::params const& params)
         : thread_squad_impl_base{ params.num_threads },
           threadData_(gsl::narrow_failfast<std::size_t>(params.num_threads), std::in_place, *this),
-          waitMode_(params.spin_wait ? wait_mode::spin_wait : wait_mode::wait)
+          waitMode_(params.spin_wait ? wait_mode::spin_wait : wait_mode::wait),
+          smtWaitMode_(params.spin_wait ? wait_mode::smt_spin_wait : wait_mode::wait)
     {
         for (int i = 0; i < numThreads; ++i)
         {
@@ -1001,6 +999,9 @@ public:
     {
         return &threadData_[threadIdx];
     }
+
+    void
+    run(detail::thread_squad_task& task) noexcept;
 };
 
 static void
@@ -1048,15 +1049,15 @@ run_thread(thread_squad_impl::thread_data& threadData)
 //
 
 
-static void
-run(thread_squad_impl& self, detail::thread_squad_task& task)
+void
+thread_squad_impl::run(detail::thread_squad_task& task)
 noexcept  // We cannot really handle exceptions here.
 {
-    bool haveWork = (task.params.concurrency != 0) || (task.params.join_requested && self.have_thread_handle());
+    bool haveWork = (task.params.concurrency != 0) || (task.params.join_requested && have_thread_handle());
 
     if (haveWork)
     {
-        if (!self.have_thread_handle())
+        if (!have_thread_handle())
         {
             THREAD_SQUAD_DBG("patton thread squad: setting up\n");
         }
@@ -1068,27 +1069,27 @@ noexcept  // We cannot really handle exceptions here.
         // We can either use global thread management (`fork_all_threads()` and `join_all_threads()`) or hierarchical thread management (`fork_thread(-1, 0)` and `join_thread(-1, 0)`),
         // but we cannot mix them. Otherwise, thread handles are created and joined by different threads, which leads to ordering issues without explicit synchronization.
 
-        self.store_task(task);
-        //if (self.have_thread_handle())
+        store_task(task);
+        //if (have_thread_handle())
         //{
-        //    self.notify_thread(-1, 0);
+        //    notify_thread(-1, 0);
         //}
         //else
         //{
-        //    self.fork_all_threads();
+        //    fork_all_threads();
         //}
-        self.notify_thread(-1, 0);
-        if (!self.have_thread_handle())
+        notify_thread(-1, 0);
+        if (!have_thread_handle())
         {
-            self.fork_thread(-1, 0);
+            fork_thread(-1, 0);
         }
-        self.wait_for_thread(-1, 0, wait_mode::wait); // no spin wait in main thread
+        wait_for_thread(-1, 0, smtWaitMode_);
         if (task.params.join_requested)
         {
-            //self.join_all_threads();
-            self.join_thread(-1, 0);
+            //join_all_threads();
+            join_thread(-1, 0);
         }
-        self.release_task();
+        release_task();
     }
 }
 
@@ -1182,7 +1183,7 @@ thread_squad_impl_deleter::operator ()(thread_squad_impl_base* base)
 
     auto noOpTask = thread_squad_nop{ };
     noOpTask.params.join_requested = true;
-    detail::run(*impl, noOpTask);
+    impl->run(noOpTask);
 }
 
 
@@ -1241,13 +1242,13 @@ thread_squad::do_run(detail::thread_squad_task& task)
     auto impl = static_cast<detail::thread_squad_impl*>(handle_.get());
     if (!task.params.join_requested)
     {
-        detail::run(*impl, task);
+        impl->run(task);
     }
     else
     {
         auto memGuard = std::unique_ptr<detail::thread_squad_impl>(impl);
         detail::thread_squad_handle(std::move(handle_)).release();
-        detail::run(*impl, task);
+        impl->run(task);
     }
 }
 
