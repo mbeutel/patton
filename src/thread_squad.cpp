@@ -708,7 +708,7 @@ private:
     static constexpr int treeBreadth = 8;
 
         // synchronization data
-    aligned_buffer<thread_data, cache_line_alignment> threadData_;
+    aligned_buffer<thread_data, page_alignment> threadData_;
     wait_mode waitMode_;
 
         // task-specific data

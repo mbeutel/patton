@@ -60,7 +60,7 @@ public:
 
     // We define our own value here instead of referring to `std::hardware_destructive_interference_size` because that can change
     // based on compiler flags and thus cause ABI breakage (which is why GCC issues a warning about it).
-static constexpr std::size_t destructive_interference_size = 64;
+static constexpr std::size_t destructive_interference_size = 1024;
 
 #ifdef _MSC_VER
 # pragma warning(push)
