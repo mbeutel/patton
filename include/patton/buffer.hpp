@@ -1,4 +1,4 @@
-
+﻿
 #ifndef INCLUDED_PATTON_BUFFER_HPP_
 #define INCLUDED_PATTON_BUFFER_HPP_
 
@@ -48,7 +48,6 @@ public:
 
 private:
     using byte_allocator_ = typename std::allocator_traits<allocator_type>::template rebind_alloc<char>;
-    static constexpr bool allocator_is_default_constructible_ = std::is_default_constructible<allocator_type>::value;
 
     gsl::owner<char*> data_;
     std::size_t size_; // # elements
@@ -113,7 +112,7 @@ public:
     using iterator = detail::aligned_buffer_iterator<T>;
     using const_iterator = detail::aligned_buffer_iterator<T const>;
 
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     constexpr aligned_buffer() noexcept
         : allocator_type{ }, data_(nullptr), size_(0), bytesPerElement_(0)
     {
@@ -122,12 +121,12 @@ public:
         : allocator_type(std::move(_alloc)), data_(nullptr), size_(0), bytesPerElement_(0)
     {
     }
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_buffer(std::size_t _size)
         : aligned_buffer(internal_constructor{ }, _size, { })
     {
     }
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_buffer(std::size_t _size, T const& _value)
         : aligned_buffer(internal_constructor{ }, _size, { }, _value)
     {
@@ -141,7 +140,7 @@ public:
     {
     }
     template <typename... Ts,
-              typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+              typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_buffer(std::size_t _size, std::in_place_t, Ts&&... _args)
         : aligned_buffer(internal_constructor{ }, _size, { }, std::forward<Ts>(_args)...)
     {
@@ -284,7 +283,6 @@ public:
 
 private:
     using byte_allocator_ = typename std::allocator_traits<allocator_type>::template rebind_alloc<char>;
-    static constexpr bool allocator_is_default_constructible_ = std::is_default_constructible<allocator_type>::value;
 
     gsl::owner<char*> data_;
     std::size_t rows_;
@@ -340,7 +338,7 @@ public:
     using iterator = detail::aligned_row_buffer_iterator<T>;
     using const_iterator = detail::aligned_row_buffer_iterator<T const>;
 
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     aligned_row_buffer() noexcept
         : allocator_type{ }, data_(nullptr), rows_(0), cols_(0), bytesPerRow_(0)
     {
@@ -349,12 +347,12 @@ public:
         : allocator_type(std::move(_alloc)), data_(nullptr), rows_(0), cols_(0), bytesPerRow_(0)
     {
     }
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_row_buffer(std::size_t _rows, std::size_t _cols)
         : aligned_row_buffer(internal_constructor{ }, _rows, _cols, { })
     {
     }
-    template <typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+    template <typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_row_buffer(std::size_t _rows, std::size_t _cols, T const& _value)
         : aligned_row_buffer(internal_constructor{ }, _rows, _cols, { }, _value)
     {
@@ -368,7 +366,7 @@ public:
     {
     }
     template <typename... Ts,
-              typename U = int, std::enable_if_t<allocator_is_default_constructible_, U> = 0>
+              typename U = int, std::enable_if_t<std::is_default_constructible_v<allocator_type>, U> = 0>
     explicit aligned_row_buffer(std::size_t _rows, std::size_t _cols, std::in_place_t, Ts&&... _args)
         : aligned_row_buffer(internal_constructor{ }, _rows, _cols, { }, std::forward<Ts>(_args)...)
     {

@@ -125,7 +125,7 @@ public:
             //
             // Synchronizes all threads which execute the current task and computes the reduction of `value` for all threads
             // with the reduction operation `reduceOp`. The result of the reduction is transformed with the `transformFunc` operation,
-            // communicated back to all threads and returned by the `reduce_transform()` call.
+            // communicated back to all threads, and returned by the `reduce_transform()` call.
             //ᅟ
             // The function objects `reduceOp` and `transformFunc` are executed on the calling thread only. `transformFunc` is executed
             // only on the thread which is the root of the synchronization operation.
@@ -218,8 +218,8 @@ public:
         //ᅟ
         // `concurrency` must not exceed the number of threads in the thread squad. A value of -1 indicates that all available
         // threads shall be used.
-        // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with an appropriate
-        // task context. If `action()` throws an exception, `std::terminate()` is called.
+        // The thread squad makes a dedicated copy of `action` for every participating thread and invokes it with a thread-specific
+        // `task_context&` argument. If `action` throws an exception, `std::terminate()` is called.
         //
     template <std::invocable<task_context&> ActionT>
     requires std::copy_constructible<ActionT>
@@ -274,7 +274,7 @@ public:
         //
     template <std::invocable<task_context&> TransformFuncT, detail::reduction<std::invoke_result_t<TransformFuncT, task_context&>> ReduceOpT>
     requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
-    [[nodiscard]] std::invoke_result_t<TransformFuncT, task_context&>
+    [[nodiscard]] auto
     transform_reduce(TransformFuncT transformFunc, std::invoke_result_t<TransformFuncT, task_context&> init, ReduceOpT reduceOp, int concurrency = -1) &&
     {
         using T = std::invoke_result_t<TransformFuncT, task_context&>;
@@ -313,7 +313,7 @@ public:
         //
     template <std::invocable<task_context&> TransformFuncT, detail::reduction<std::invoke_result_t<TransformFuncT, task_context&>> ReduceOpT>
     requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
-    [[nodiscard]] std::invoke_result_t<TransformFuncT, task_context&>
+    [[nodiscard]] auto
     transform_reduce(TransformFuncT transformFunc, std::invoke_result_t<TransformFuncT, task_context&> init, ReduceOpT reduceOp, int concurrency = -1) &
     {
         using T = std::invoke_result_t<TransformFuncT, task_context&>;
@@ -351,7 +351,7 @@ public:
         //
     template <std::invocable<task_context&> TransformFuncT, detail::reduction<std::invoke_result_t<TransformFuncT, task_context&>> ReduceOpT>
     requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
-    [[nodiscard]] std::invoke_result_t<TransformFuncT, task_context&>
+    [[nodiscard]] auto
     transform_reduce_first(TransformFuncT transformFunc, ReduceOpT reduceOp, int concurrency = -1) &&
     {
         using T = std::invoke_result_t<TransformFuncT, task_context&>;
@@ -383,7 +383,7 @@ public:
         //
     template <std::invocable<task_context&> TransformFuncT, detail::reduction<std::invoke_result_t<TransformFuncT, task_context&>> ReduceOpT>
     requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
-    [[nodiscard]] std::invoke_result_t<TransformFuncT, task_context&>
+    [[nodiscard]] auto
     transform_reduce_first(TransformFuncT transformFunc, ReduceOpT reduceOp, int concurrency = -1) &
     {
         using T = std::invoke_result_t<TransformFuncT, task_context&>;

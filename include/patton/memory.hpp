@@ -127,8 +127,8 @@ constexpr std::size_t cache_line_alignment = (std::size_t(-1) & ~(std::size_t(-1
     // `cache_line_alignment` are not known until runtime,
     // hence to satisfy a requested special alignment it must be provided explicitly by the provided alignment.
     //
-[[nodiscard]] bool
-constexpr provides_static_alignment(std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept
+[[nodiscard]] constexpr bool
+provides_static_alignment(std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept
 {
     return detail::provides_static_alignment(alignmentProvided, alignmentRequested);
 }
@@ -139,8 +139,8 @@ constexpr provides_static_alignment(std::size_t alignmentProvided, std::size_t a
     // Looks up the alignments corresponding to the special alignment values `large_page_alignment`, `page_alignment`, and
     // `cache_line_alignment`.
     //
-[[nodiscard]] bool
-inline provides_dynamic_alignment(std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept
+[[nodiscard]] inline bool
+provides_dynamic_alignment(std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept
 {
     return detail::provides_dynamic_alignment(alignmentProvided, alignmentRequested);
 }
@@ -153,20 +153,20 @@ template <typename A>
 struct aligned_allocator_traits
 {
 private:
-    bool
-    static constexpr provides_static_alignment_impl(std::size_t a, std::false_type /*hasMember*/)
+    static constexpr bool
+    provides_static_alignment_impl(std::size_t a, std::false_type /*hasMember*/)
     {
         return patton::provides_static_alignment(alignof(std::max_align_t), a);
     }
-    bool
-    static constexpr provides_static_alignment_impl(std::size_t a, std::true_type /*hasMember*/)
+    static constexpr bool
+    provides_static_alignment_impl(std::size_t a, std::true_type /*hasMember*/)
     {
         return A::provides_static_alignment(a);
     }
 
 public:
-    [[nodiscard]] bool
-    static constexpr provides_static_alignment(std::size_t a) noexcept
+    [[nodiscard]] static constexpr bool
+    provides_static_alignment(std::size_t a) noexcept
     {
         return provides_static_alignment_impl(a, detail::has_member_provides_static_alignment<A>{ });
     }
