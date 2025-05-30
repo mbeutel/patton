@@ -101,7 +101,7 @@ cf. https://docs.microsoft.com/en-us/windows/win32/memory/large-page-support.
 
 - [Special alignment values](#special-alignment-values)
 - [Alignment checking](#alignment-checking)
-- [`allocate_unique<>()` and `allocator_deleter<>`](#allocate_unique-and-allocator_deleter) (TODO)
+- [`allocate_unique<>()` and `allocator_deleter<>`](#allocate_unique-and-allocator_deleter)
 
 #### Special alignment values
 
@@ -429,9 +429,12 @@ It can be used to configure thread affinity in [`thread_squad`](#thread_squad) i
 
 ## `thread_squad`
 
+Header file: `<patton/thread_squad.hpp>`
+
 - [`thread_squad::params`](#thread_squad-params)
 - [`thread_squad` member functions](#thread_squad-member-functions)
 - [`thread_squad::task_context`](#thread_squad-task_context)
+- [Examples](#examples)
 
 A `thread_squad` is a simple thread pool with support for thread core affinity:
 
@@ -475,29 +478,29 @@ struct thread_squad::params
 };
 ```
 
-The member `num_threads` indicates how many threads to fork. A value of 0 indicates "as many as hardware threads are available"
-(cf. [`std::thread::hardware_concurrency()`](https://en.cppreference.com/w/cpp/thread/thread/hardware_concurrency.html)).
+- `num_threads` indicates how many threads to fork. A value of 0 indicates "as many as hardware threads are available"
+  (cf. [`std::thread::hardware_concurrency()`](https://en.cppreference.com/w/cpp/thread/thread/hardware_concurrency.html)).
 
-The member `pin_to_hardware_threads` controls whether threads are pinned to hardware threads, that is, whether threads have a
-core affinity. This may helps maintain data locality.  
-*Note:* Core affinity is not currently supported on MacOS.
+- `pin_to_hardware_threads` controls whether threads are pinned to hardware threads, that is, whether threads have a
+  core affinity. This may helps maintain data locality.  
+  *Note:* Core affinity is not currently supported on MacOS.
 
-The member `spin_wait` controls whether thread synchronization uses spin waiting with exponential backoff. This is often faster
-than wait-based synchronization, especially on highly parallel systems.
+- `spin_wait` controls whether thread synchronization uses spin waiting with exponential backoff. This is often faster
+  than wait-based synchronization, especially on highly parallel systems.
 
-The member `max_num_hardware_threads` limits the maximal number of hardware threads to pin threads to. A value of 0 indicates
-"as many as possible".  
-If `max_num_hardware_threads` is 0 and `hardware_thread_mappings` is non-empty, `hardware_thread_mappings.size()`
-is taken as the maximal number of hardware threads to pin threads to.  
-If `hardware_thread_mappings` is not empty, `max_num_hardware_threads` must not be larger than
-`hardware_thread_mappings.size()`.  
-Setting `max_num_hardware_threads` can be useful to increase reproducibility of synchronization and data race bugs
-by running multiple threads on the same core.
+- `max_num_hardware_threads` limits the maximal number of hardware threads to pin threads to. A value of 0 indicates
+  "as many as possible".  
+  If `max_num_hardware_threads` is 0 and `hardware_thread_mappings` is non-empty, `hardware_thread_mappings.size()`
+  is taken as the maximal number of hardware threads to pin threads to.  
+  If `hardware_thread_mappings` is not empty, `max_num_hardware_threads` must not be larger than
+  `hardware_thread_mappings.size()`.  
+  Setting `max_num_hardware_threads` can be useful to increase reproducibility of synchronization and data race bugs
+  by running multiple threads on the same core.
 
-The member `hardware_thread_mappings` maps thread indices to hardware thread ids. If empty, the thread squad uses thread indices
-as hardware thread ids.  
-If non-empty and if `max_num_hardware_threads == 0`, `hardware_thread_mappings.size()` is taken as the maximal
-number of hardware threads to pin threads to.
+- `hardware_thread_mappings` maps thread indices to hardware thread ids. If empty, the thread squad uses thread indices
+  as hardware thread ids.  
+  If non-empty and if `max_num_hardware_threads == 0`, `hardware_thread_mappings.size()` is taken as the maximal
+  number of hardware threads to pin threads to.
 
 
 ### `thread_squad` member functions
@@ -542,7 +545,9 @@ The member function template `transform_reduce_first(transformFunc, reduceOp, co
 and waits until all tasks have run to completion, then returns the result reduced with the `reduceOp` operator:
 ```c++
 template <std::invocable<task_context&> TransformFuncT, typename ReduceOpT>
-requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
+requires std::copy_constructible<TransformFuncT> &&
+         std::copy_constructible<ReduceOpT> &&
+         std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
 auto thread_squad::transform_reduce(
     TransformFuncT transformFunc,
     std::invoke_result_t<TransformFuncT, task_context&> init,
@@ -564,7 +569,9 @@ The member function template `transform_reduce_first(transformFunc, reduceOp, co
 and waits until all tasks have run to completion, then returns the result reduced with the `reduceOp` operator:
 ```c++
 template <std::invocable<task_context&> TransformFuncT, typename ReduceOpT>
-requires std::copy_constructible<TransformFuncT> && std::copy_constructible<ReduceOpT> && std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
+requires std::copy_constructible<TransformFuncT> &&
+         std::copy_constructible<ReduceOpT> &&
+         std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
 auto transform_reduce_first(
     TransformFuncT transformFunc,
     ReduceOpT reduceOp,
@@ -584,7 +591,7 @@ The class `thread_squad::task_context` represents the state passed to tasks that
 It has the following member functions:
 
 - [`thread_index()`](#thread_index): returns current thread index
-- [`num_threads()`](#num_threads1): returns number of currently executing threads (TODO)
+- [`num_threads()`](#num_threads-1): returns number of currently executing threads
 - [`synchronize()`](#synchronize): synchronizes threads which execute the current task
 - [`reduce()`](#reduce): performs a reduction operation among currently executing threads
 - [`reduce_transform()`](#reduce_transform): performs a reduction operation among currently executing threads followed by a synchronous transformation
@@ -597,7 +604,7 @@ The member function `thread_index()` returns the index of the thread currently e
 int thread_squad::task_context::thread_index() const noexcept;
 ```
 
-The thread index is a value greater than or equal to 0 and smaller than [`num_threads()`](#num_threads1).
+The thread index is a value greater than or equal to 0 and smaller than [`num_threads()`](#num_threads-1).
 
 
 #### `num_threads()`
@@ -657,3 +664,77 @@ only on the thread which is the root of the synchronization operation.
 It is the responsibility of the task to ensure that synchronization operations such as `synchronize()`, `reduce_transform()`,
 and `reduce()` are executed by all participating threads unconditionally and in the same order.  
 If either of the function objects `transformFunc` or `reduceOp` throws an exception, `std::terminate()` is called.
+
+
+### Examples
+
+The following code uses a thread squad with the default configuration to concurrently execute
+[`std::println()`](https://en.cppreference.com/w/cpp/io/println.html) statements on every hardware thread in the system:
+
+```c++
+#include <print>
+
+#include <patton/thread_squad.hpp>
+
+int main()
+{
+    patton::thread_squad({ }).run(
+        [](patton::thread_squad::task_context& taskCtx)
+        {
+            std::println("Hello from thread {}", taskCtx.thread_index());
+        });
+}
+```
+
+This use of `thread_squad` is rather wasteful, though, because forking and joining threads can be very expensive. A thread
+squad maintains a pool of threads that go to sleep after processing a task can be awakened on demand, which is usually more
+efficient than joining them and forking new threads.
+
+The following example uses a thread squad with pinned threads to concurrently execute `std::println()` statements on every
+core, as opposed to every hardware thread:
+
+```c++
+#include <print>
+
+#include <gsl-lite/gsl-lite.hpp>
+
+#include <patton/thread_squad.hpp>
+
+int main()
+{
+    auto& threadSquad = patton::thread_squad({
+        .num_threads = gsl_lite::narrow_failfast<int>(patton::physical_concurrency()),
+        .pin_to_hardware_threads = true,
+        .hardware_thread_mappings = patton::physical_core_ids()
+    });
+    threadSquad.run(
+        [](patton::thread_squad::task_context& taskCtx)
+        {
+            std::println("Hello from thread {}", taskCtx.thread_index());
+        });
+}
+```
+
+
+The threads in a thread squad may communicate through reductions, as is demonstrated by the following example:
+
+```c++
+#include <print>
+#include <functional>
+
+#include <patton/thread_squad.hpp>
+
+int main()
+{
+    auto& threadSquad = patton::thread_squad({
+        .num_threads = 4
+    });
+    threadSquad.run(
+        [](patton::thread_squad::task_context& taskCtx)
+        {
+            int iThread = taskCtx.thread_index();
+            int sum = taskCtx.reduce(iThread, std::plus<>{ });
+            std::println("Hello from thread {}; the sum of all thread indices is {}", iThread, sum);
+        });
+}
+```

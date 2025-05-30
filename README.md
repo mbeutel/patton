@@ -12,13 +12,12 @@
 ## Contents
 
 - [Example usage](#example-usage)
-- [In a nutshell](#in-a-nutshell)
+- [Features](#features)
+- [Reference documentation](doc/Reference.md)
 - [License](#license)
 - [Dependencies](#dependencies)
 - [Compiler and platform support](#compiler-and-platform-support)
 - [Installation and use](#installation-and-use)
-- [Features](#features)
-- [Reference documentation](doc/Reference.md)
 - [Version semantics](#version-semantics)
 
 
@@ -36,6 +35,18 @@ int main()
     std::cout << "Number of cores: " << patton::physical_concurrency() << "\n";
 }
 ```
+
+
+## Features
+
+*patton* provides the following components:
+
+- [Allocators](doc/Reference.md#allocators) with user-defined alignment and element initialization
+- [Containers](doc/Reference.md#containers) with user-defined alignment
+- Basic [hardware information](doc/Reference.md#hardware-information) (page size, cache line size, number of cores)
+- [`thread_squad`](doc/Reference.md#thread_squad), a simple thread pool
+
+For more information, please refer to the [reference documentation](doc/Reference.md).
 
 
 ## License
@@ -81,22 +92,10 @@ target_compile_features(my-program PRIVATE cxx_std_20)
 target_link_libraries(my-program PRIVATE patton::patton)
 ```
 
-*patton* may also be obtained with [CPM](https://github.com/cpm-cmake/CPM.cmake):
+*patton* may be obtained with [CPM](https://github.com/cpm-cmake/CPM.cmake):
 ```cmake
 CPMFindPackage(NAME patton GIT_TAG master GITHUB_REPOSITORY mbeutel/patton)
 ```
-
-
-## Features
-
-*patton* provides the following components:
-
-- [Allocators](doc/Reference.md#allocators) with user-defined alignment and element initialization
-- [Containers](doc/Reference.md#containers) with user-defined alignment
-- Basic [hardware information](doc/Reference.md#hardware-information) (page size, cache line size, number of cores)
-- [`thread_squad`](doc/Reference.md#thread_squad), a simple thread pool
-
-For more information, please refer to the [reference documentation](doc/Reference.md).
 
 
 ## Version semantics
