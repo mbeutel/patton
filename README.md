@@ -44,7 +44,7 @@ int main()
 - [Allocators](doc/Reference.md#allocators) with user-defined alignment and element initialization
 - [Containers](doc/Reference.md#containers) with user-defined alignment
 - Basic [hardware information](doc/Reference.md#hardware-information) (page size, cache line size, number of cores)
-- [`thread_squad`](doc/Reference.md#thread_squad), a simple thread pool
+- Configurable [thread pools](doc/Reference.md#thread-pools)
 
 For more information, please refer to the [reference documentation](doc/Reference.md).
 

@@ -5,7 +5,7 @@
 - [Allocators](#allocators) with user-defined alignment and element initialization
 - [Containers](#containers) with user-defined alignment
 - Basic [hardware information](#hardware-information) (page size, cache line size, number of cores)
-- [Thread squad](#thread-squad): a simple thread pool
+- Configurable [thread pools](#thread-pools)
 
 All symbols defined here reside in the namespace `patton`.
 
@@ -426,13 +426,13 @@ The function `physical_core_ids()` returns a list of thread ids, where each thre
 ```c++
 std::span<int const> physical_core_ids() noexcept;
 ```
-It can be used to configure thread affinity in [`thread_squad`](#thread-squad) if no simultaneous multithreading
+It can be used to configure thread affinity in [`thread_squad`](#thread-pools) if no simultaneous multithreading
 ("hyper-threading") is desired.
 
 `physical_core_ids()` returns an empty span if thread affinity is not supported by the OS.
 
 
-## Thread squad
+## Thread pools
 
 Header file: `<patton/thread_squad.hpp>`
 
@@ -691,7 +691,7 @@ int main()
 }
 ```
 
-This use of `thread_squad` is rather wasteful, though, because forking and joining threads can be very expensive. A thread
+One-time use of `thread_squad` can be unnecessarily wasteful because forking and joining threads can be very expensive. A thread
 squad is meant to be reused; it maintains a pool of threads that go to sleep after processing a task can be awakened on demand,
 which is usually more efficient than joining them and forking new threads.
 
@@ -707,7 +707,7 @@ core, as opposed to every hardware thread:
 
 int main()
 {
-    auto& threadSquad = patton::thread_squad({
+    auto threadSquad = patton::thread_squad({
         .num_threads = gsl_lite::narrow_failfast<int>(patton::physical_concurrency()),
         .pin_to_hardware_threads = true,
         .hardware_thread_mappings = patton::physical_core_ids()
@@ -731,7 +731,7 @@ The threads in a thread squad may communicate through reductions, as is demonstr
 
 int main()
 {
-    auto& threadSquad = patton::thread_squad({
+    auto threadSquad = patton::thread_squad({
         .num_threads = 4
     });
     threadSquad.run(
