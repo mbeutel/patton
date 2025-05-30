@@ -76,7 +76,7 @@ jobs:
       cxxCompiler: GCC
       cxxCompilerVersions: [14]
       platforms: [x64]
-      tag: 'sanitize-thread'
+      tag: 'sanitize_thread'
       cmakeConfigPreset: 'ci-gcc-sanitize-thread'
 
     #- os: Linux
@@ -95,7 +95,7 @@ jobs:
       cxxCompiler: Clang
       cxxCompilerVersions: [19]
       platforms: [x64]
-      tag: 'sanitize-thread'
+      tag: 'sanitize_thread'
       cmakeConfigPreset: 'ci-clang-sanitize-thread'
 
     - os: Linux

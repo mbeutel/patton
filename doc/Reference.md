@@ -5,7 +5,7 @@
 - [Allocators](#allocators) with user-defined alignment and element initialization
 - [Containers](#containers) with user-defined alignment
 - Basic [hardware information](#hardware-information) (page size, cache line size, number of cores)
-- [`thread_squad`](#thread_squad), a simple thread pool
+- [Thread squad](#thread-squad): a simple thread pool
 
 All symbols defined here reside in the namespace `patton`.
 
@@ -121,8 +121,13 @@ Special alignment value | Meaning              |
 The following helper functions can be used to check whether an alignment is satisfied:
 
 ```c++
-constexpr bool provides_static_alignment( std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept;
-bool           provides_dynamic_alignment(std::size_t alignmentProvided, std::size_t alignmentRequested) noexcept;
+constexpr bool provides_static_alignment(
+    std::size_t alignmentProvided,
+    std::size_t alignmentRequested) noexcept;
+
+bool provides_dynamic_alignment(
+    std::size_t alignmentProvided,
+    std::size_t alignmentRequested) noexcept;
 ```
 
 The alignments corresponding to the special alignment values `large_page_alignment`, `page_alignment`, and `cache_line_alignment`
@@ -421,13 +426,13 @@ The function `physical_core_ids()` returns a list of thread ids, where each thre
 ```c++
 std::span<int const> physical_core_ids() noexcept;
 ```
-It can be used to configure thread affinity in [`thread_squad`](#thread_squad) if no simultaneous multithreading
+It can be used to configure thread affinity in [`thread_squad`](#thread-squad) if no simultaneous multithreading
 ("hyper-threading") is desired.
 
 `physical_core_ids()` returns an empty span if thread affinity is not supported by the OS.
 
 
-## `thread_squad`
+## Thread squad
 
 Header file: `<patton/thread_squad.hpp>`
 
@@ -507,13 +512,13 @@ struct thread_squad::params
 
 `thread_squad` has the following member functions:
 
-- [`num_threads()`](#num_threads): returns number of threads held by the thread squad
-- [`run()`](#run): concurrently executes an action
-- [`transform_reduce()`](#transform_reduce): concurrently executes a transform–reduce operation
-- [`transform_reduce_first()`](#transform_reduce_first): concurrently executes a transform–reduce operation without initial value
+- [`thread_squad::num_threads()`](#thread_squad-num_threads): returns number of threads held by the thread squad
+- [`thread_squad::run()`](#thread_squad-run): concurrently executes an action
+- [`thread_squad::transform_reduce()`](#thread_squad-transform_reduce): concurrently executes a transform–reduce operation
+- [`thread_squad::transform_reduce_first()`](#thread_squad-transform_reduce_first): concurrently executes a transform–reduce operation without initial value
 
 
-#### `num_threads()`
+#### `thread_squad::num_threads()`
 
 The member function `num_threads()` returns number of threads held by the thread squad:
 ```c++
@@ -521,7 +526,7 @@ int thread_squad::num_threads() const;
 ```
 
 
-#### `run()`
+#### `thread_squad::run()`
 
 The member function template `run(action, concurrency)` executes the given action on `concurrency` threads and waits until all tasks have
 run to completion:
@@ -539,7 +544,7 @@ The thread squad makes a dedicated copy of `action` for every participating thre
 [`std::terminate()`](https://en.cppreference.com/w/cpp/error/terminate.html) is called.
 
 
-#### `transform_reduce()`
+#### `thread_squad::transform_reduce()`
 
 The member function template `transform_reduce_first(transformFunc, reduceOp, concurrency)` runs `transformFunc` on `concurrency` threads
 and waits until all tasks have run to completion, then returns the result reduced with the `reduceOp` operator:
@@ -563,7 +568,7 @@ is invoked with a thread-specific [`task_context&`](#thread_squad-task_context) 
 `reduceOp` throws an exception, [`std::terminate()`](https://en.cppreference.com/w/cpp/error/terminate.html) is called.
 
 
-#### `transform_reduce_first()`
+#### `thread_squad::transform_reduce_first()`
 
 The member function template `transform_reduce_first(transformFunc, reduceOp, concurrency)` runs `transformFunc` on `concurrency` threads
 and waits until all tasks have run to completion, then returns the result reduced with the `reduceOp` operator:
@@ -572,7 +577,7 @@ template <std::invocable<task_context&> TransformFuncT, typename ReduceOpT>
 requires std::copy_constructible<TransformFuncT> &&
          std::copy_constructible<ReduceOpT> &&
          std::copyable<std::invoke_result_t<TransformFuncT, task_context&>>
-auto transform_reduce_first(
+auto thread_squad::transform_reduce_first(
     TransformFuncT transformFunc,
     ReduceOpT reduceOp,
     int concurrency = -1);
@@ -590,24 +595,24 @@ is invoked with a thread-specific [`task_context&`](#thread_squad-task_context) 
 The class `thread_squad::task_context` represents the state passed to tasks that are executed in thread squad.
 It has the following member functions:
 
-- [`thread_index()`](#thread_index): returns current thread index
-- [`num_threads()`](#num_threads-1): returns number of currently executing threads
-- [`synchronize()`](#synchronize): synchronizes threads which execute the current task
-- [`reduce()`](#reduce): performs a reduction operation among currently executing threads
-- [`reduce_transform()`](#reduce_transform): performs a reduction operation among currently executing threads followed by a synchronous transformation
+- [`task_context::thread_index()`](#task_context-thread_index): returns current thread index
+- [`task_context::num_threads()`](#task_context-num_threads): returns number of currently executing threads
+- [`task_context::synchronize()`](#task_context-synchronize): synchronizes threads which execute the current task
+- [`task_context::reduce()`](#task_context-reduce): performs a reduction operation among currently executing threads
+- [`task_context::reduce_transform()`](#task_context-reduce_transform): performs a reduction operation among currently executing threads followed by a synchronous transformation
 
 
-#### `thread_index()`
+#### `task_context::thread_index()`
 
 The member function `thread_index()` returns the index of the thread currently executing:
 ```c++
 int thread_squad::task_context::thread_index() const noexcept;
 ```
 
-The thread index is a value greater than or equal to 0 and smaller than [`num_threads()`](#num_threads-1).
+The thread index is a value greater than or equal to 0 and smaller than [`num_threads()`](#task_context-num_threads).
 
 
-#### `num_threads()`
+#### `task_context::num_threads()`
 
 The member function `num_threads()` returns the number of concurrent threads currently executing the task:
 ```c++
@@ -615,7 +620,7 @@ int thread_squad::task_context::num_threads() const noexcept;
 ```
 
 
-#### `synchronize()`
+#### `task_context::synchronize()`
 
 The member function `synchronize()` synchronizes all threads which execute the current task:
 ```c++
@@ -626,7 +631,7 @@ It is the responsibility of the task to ensure that synchronization operations s
 and `reduce()` are executed by all participating threads unconditionally and in the same order.
 
 
-#### `reduce()`
+#### `task_context::reduce()`
 
 The member function template `reduce(value, reduceOp)` synchronizes all threads which execute the
 current task and computes the reduction of `value` for all threads with the reduction operation `reduceOp`:
@@ -645,7 +650,7 @@ and `reduce()` are executed by all participating threads unconditionally and in 
 If the function object `reduceOp` throws an exception, `std::terminate()` is called.
 
 
-#### `reduce_transform()`
+#### `task_context::reduce_transform()`
 
 The member function template `reduce_transform(value, reduceOp, transformFunc)` synchronizes all threads which execute the
 current task and computes the reduction of `value` for all threads with the reduction operation `reduceOp`:
@@ -687,8 +692,8 @@ int main()
 ```
 
 This use of `thread_squad` is rather wasteful, though, because forking and joining threads can be very expensive. A thread
-squad maintains a pool of threads that go to sleep after processing a task can be awakened on demand, which is usually more
-efficient than joining them and forking new threads.
+squad is meant to be reused; it maintains a pool of threads that go to sleep after processing a task can be awakened on demand,
+which is usually more efficient than joining them and forking new threads.
 
 The following example uses a thread squad with pinned threads to concurrently execute `std::println()` statements on every
 core, as opposed to every hardware thread:
@@ -733,7 +738,7 @@ int main()
         [](patton::thread_squad::task_context& taskCtx)
         {
             int iThread = taskCtx.thread_index();
-            int sum = taskCtx.reduce(iThread, std::plus<>{ });
+            int sum = taskCtx.reduce(iThread, std::plus<>{ });  // 0 + 1 + 2 + 3 = 6
             std::println("Hello from thread {}; the sum of all thread indices is {}", iThread, sum);
         });
 }
