@@ -1,0 +1,6 @@
+﻿description: hardware-sensitive parallel programming in C++
+remote_theme: jekyll/minima@0b7ca6b
+plugins:
+  - jekyll-remote-theme
+minima:
+  skin: auto
