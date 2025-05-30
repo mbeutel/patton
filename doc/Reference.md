@@ -57,7 +57,7 @@ template <typename T, std::size_t Alignment>
 class aligned_allocator { ... };
 ```
 ᅟ
-`aligned_allocator<>` supports special alignment values such as [`cache_line_alignment`](#cache_line_alignment).
+`aligned_allocator<>` supports [special alignment values](#special-alignment-values) such as `cache_line_alignment`.
 Multiple alignment requirements can be combined using bitmask operations, e.g. `cache_line_alignment | alignof(T)`.
 
 ### `aligned_allocator_adaptor<>`
@@ -69,7 +69,7 @@ template <typename T, std::size_t Alignment, typename A>
 class aligned_allocator_adaptor : ... { ... };
 ```
 
-`aligned_allocator_adaptor<> `supports special alignment values such as [`cache_line_alignment`](#cache_line_alignment).
+`aligned_allocator_adaptor<> `supports [special alignment values](#special-alignment-values) such as `cache_line_alignment`.
 Multiple alignment requirements can be combined using bitmask operations, e.g. `cache_line_alignment | alignof(T)`.
 
 ### `page_allocator<>`
@@ -137,7 +137,7 @@ requested special alignment is stated explicitly by the provided alignment:
 ```c++
 std::size_t pageSize = hardware_page_size();
 
-    // false because alignment cannot be guaranteed at runtime
+    // false because alignment cannot be guaranteed statically
 bool isStaticCLAligned = provides_static_alignment(pageSize, cache_line_alignment);
 
     // true because page size is a multiple of cache line size
@@ -299,7 +299,7 @@ auto threadData = aligned_buffer<ThreadData, cache_line_alignment>(numThreads);
 // every `threadData[i]` has cache-line alignment => no false sharing
 ```
 
-`aligned_buffer<>` supports special alignment values such as [`cache_line_alignment`](#cache_line_alignment).
+`aligned_buffer<>` supports [special alignment values](#special-alignment-values) such as `cache_line_alignment`.
 Multiple alignment requirements can be combined using bitmask operations, e.g. `cache_line_alignment | alignof(T)`.
 
 
@@ -374,7 +374,7 @@ auto threadData = aligned_row_buffer<float, cache_line_alignment>(rows, cols);
 // every `threadData[i][0]` has cache-line alignment => no false sharing
 ```
 
-`aligned_row_buffer<>` supports special alignment values such as [`cache_line_alignment`](#cache_line_alignment).
+`aligned_row_buffer<>` supports [special alignment values](#special-alignment-values) such as `cache_line_alignment`.
 Multiple alignment requirements can be combined using bitmask operations, e.g. `cache_line_alignment | alignof(T)`.
 
 
@@ -692,7 +692,7 @@ int main()
 ```
 
 One-time use of `thread_squad` can be unnecessarily wasteful because forking and joining threads can be very expensive. A thread
-squad is meant to be reused; it maintains a pool of threads that go to sleep after processing a task can be awakened on demand,
+squad is meant to be reused; it maintains a pool of threads that go to sleep after processing a task and can be awakened on demand,
 which is usually more efficient than joining them and forking new threads.
 
 The following example uses a thread squad with pinned threads to concurrently execute `std::println()` statements on every
