@@ -13,6 +13,7 @@
 
 - [Example usage](#example-usage)
 - [Features](#features)
+- [Alternatives](#alternatives)
 - [Reference documentation](doc/Reference.md)
 - [License](#license)
 - [Dependencies](#dependencies)
@@ -47,6 +48,28 @@ int main()
 - Configurable [thread pools](doc/Reference.md#thread-pools)
 
 For more information, please refer to the [reference documentation](doc/Reference.md).
+
+
+## Alternatives
+
+Instead of using a container with a [default-initializing allocator](doc/Reference.md#default_init_allocator), one could
+allocate the data with [`std::make_shared_for_overwrite<>()`](https://en.cppreference.com/w/cpp/memory/shared_ptr/make_shared).
+This may be less safe and less convenient, though, because `shared_ptr<T[]>` does not expose a container-like interface.
+
+Instead of using a [container with user-defined element alignment](doc/Reference.md#aligned_buffer), one could define a `struct`
+aligned to [`std::hardware_destructive_interference_size`](https://en.cppreference.com/w/cpp/thread/hardware_destructive_interference_size.html)
+with an [`alignas()`](https://en.cppreference.com/w/cpp/language/alignas.html) specifier. However, `std::hardware_destructive_interference_size`
+is a compile-time constant, and the actual cache line size of the architecture may differ. What's worse, for some compilers
+`std::hardware_destructive_interference_size` is defined differently depending on compiler flags, and thus using the value for
+alignment of data structures may lead to ABI incompatibility issues.
+
+For querying information on hardware properties and topology, one may refer to the [*hwloc*](https://www.open-mpi.org/projects/hwloc/)
+library instead.
+
+Instead of managing a [configurable thread pool](#thread-pools) explicitly, one could rely on [OpenMP](https://www.openmp.org/) or use
+the [Threading Building Blocks (TBB)](https://github.com/uxlfoundation/oneTBB) library. OpenMP uses a rather different programming model
+designed for easy adaptation and parallelization of existing sequential code through `#pragma` annotations. TBB is a task-based
+parallel programming library which can be configured to [respect thread affinity](https://uxlfoundation.github.io/oneTBB/main/tbb_userguide/Bandwidth_and_Cache_Affinity_os.html).
 
 
 ## License
