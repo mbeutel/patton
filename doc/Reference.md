@@ -5,7 +5,7 @@
 - [Allocators](#allocators) with user-defined alignment and element initialization
 - [Containers](#containers) with user-defined alignment
 - Basic [hardware information](#hardware-information) (page size, cache line size, number of cores)
-- Configurable [thread pools](#thread-pools)
+- A configurable [thread pool](#thread-pools)
 
 All symbols defined here reside in the namespace `patton`.
 
