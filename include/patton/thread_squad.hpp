@@ -137,7 +137,7 @@ public:
         auto
         reduce_transform(T value, ReduceOpT reduceOp, TransformFuncT transformFunc) noexcept
         {
-            using R = std::decay_t<decltype(transformFunc(value))>;
+            using R = std::decay_t<decltype(transformFunc(std::move(value)))>;
 
             auto synchronizer = detail::task_context_reduce_transform_synchronizer<T, ReduceOpT, R>(std::move(value), reduceOp);
             collect(synchronizer);
