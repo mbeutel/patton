@@ -703,6 +703,7 @@ core, as opposed to every hardware thread:
 
 #include <gsl-lite/gsl-lite.hpp>
 
+#include <patton/thread.hpp>
 #include <patton/thread_squad.hpp>
 
 int main()

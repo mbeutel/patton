@@ -117,6 +117,9 @@ target_link_libraries(my-program PRIVATE patton::patton)
 
 *patton* may be obtained with [CPM](https://github.com/cpm-cmake/CPM.cmake):
 ```cmake
+# obtain dependencies
+CPMFindPackage(NAME gsl-lite  VERSION  1.0.1 GITHUB_REPOSITORY gsl-lite/gsl-lite)
+
 CPMFindPackage(NAME patton GIT_TAG master GITHUB_REPOSITORY mbeutel/patton)
 ```
 
